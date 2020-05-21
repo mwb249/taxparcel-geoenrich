@@ -5,11 +5,14 @@ webgis:
   password:
   profile:
 fservice:
-  url:
-  layer:
+  pull_url:
+  pull_layer:
+  push_url:
+  push_layer:
 cvt_code:
 db:
   instance:
+  database:
   user:
   password:
 ...
