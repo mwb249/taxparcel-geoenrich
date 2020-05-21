@@ -1,0 +1,15 @@
+---
+webgis:
+  portal:
+  user:
+  password:
+  profile:
+fservice:
+  url:
+  layer:
+cvt_code:
+db:
+  instance:
+  user:
+  password:
+...
