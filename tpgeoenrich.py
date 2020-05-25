@@ -63,3 +63,4 @@ def enrich():
 if __name__ == "__main__":
     enrich()
 
+print('test')
