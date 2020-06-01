@@ -133,3 +133,6 @@ dmypy.json
 
 # Config files
 config.yml
+
+Jupyter Notebook
+*.ipynb

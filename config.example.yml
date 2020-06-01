@@ -1,18 +1,23 @@
 ---
+# WebGIS information (Portal for ArcGIS or ArcGIS Online)
 webgis:
-  portal:
-  user:
-  password:
   profile:
-fservice:
-  pull_url:
-  pull_layer:
-  push_url:
-  push_layer:
-cvt_code:
-db:
-  instance:
-  database:
-  user:
-  password:
+
+# Tax Parcel ZIP file URL
+opendata_url:
+
+# GIS Environment settings
+gis_env:
+  workspace:
+  overwrite_output: True
+  out_fc_name:
+
+# List requested CVT codes below. Use quoted text (ex. 'J'). Remove all lines to request the entire dataset
+cvt_codes:
+  - 'A_ex'
+  - 'B_ex'
+
+# Path to BS&A export.
+csv:
+  uri:
 ...
