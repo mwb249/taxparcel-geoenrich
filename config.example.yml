@@ -1,23 +1,27 @@
 ---
-# WebGIS information (Portal for ArcGIS or ArcGIS Online)
+# WebGIS information
 webgis:
-  profile:
+  profile: profile_somegis
+  f_serv_id: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# Tax Parcel ZIP file URL
-opendata_url:
+# Tax Parcel zipfile URL
+opendata_url: https://opendata.arcgis.com/datasets/xxxxxxxxxxxxxxxxxxxxxxxxxxxx.zip
 
 # GIS Environment settings
 gis_env:
-  workspace:
+  workspace: C:\GIS\path\to\enterprise_geodatabase.sde
   overwrite_output: True
-  out_fc_name:
+  out_fc_name: TaxParcel_SomeMunicipality
+  # Projection Examples (match Esri's description):
+  # NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)
+  # WGS 1984 Web Mercator (auxiliary sphere)
+  out_fc_proj: NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)
 
 # List requested CVT codes below. Use quoted text (ex. 'J'). Remove all lines to request the entire dataset
 cvt_codes:
   - 'A_ex'
   - 'B_ex'
 
-# Path to BS&A export.
-csv:
-  uri:
+# Path to BS&A table export
+csv_uri: C:/path/to/ExportedTable.CSV
 ...

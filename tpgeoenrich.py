@@ -62,6 +62,7 @@ def shpfilename(directory):
 def getshpfile(directory):
     """Requests and downloads zipped shapefile from specified open data website, unzips to temporary directory."""
     # Make request to get zipped tax parcel shapefile
+    print('Downloading zipped shapefile...')
     resp = requests.get(cfg['opendata_url'], allow_redirects=True, timeout=10.0)
 
     # Save zipfile to temporary directory
@@ -71,19 +72,14 @@ def getshpfile(directory):
     zip_file.write(resp.content)
     zip_file.close()
 
-    # Print Message
-    print('Shapefile Downloaded...')
-
     # Open the zipfile in READ mode and extract all files to temporary directory
+    print('Unzipping...')
     with ZipFile(zip_path, 'r') as zip_file:
         zip_file.extractall(directory)
 
-    # Print Message
-    print('Shapefile unzipped...')
-
     # Delete zip file
     os.remove(zip_path)
-    return 'Shapefile deleted...'
+    return 'Zipfile deleted...'
 
 
 def cleanup(directory):
@@ -98,6 +94,7 @@ def cleanup(directory):
 def geoenrich(directory):
     """Takes zipped response from website, joins BS&A table data, then copies to a geodatabase feature class."""
     # Set initial environment workspace
+    print('Setting environment workspace and settings...')
     arcpy.env.workspace = directory
 
     # Set environment settings
@@ -105,12 +102,14 @@ def geoenrich(directory):
     arcpy.env.overwriteOutput = cfg['gis_env']['overwrite_output']
 
     # Set variable to name of shapefile
+    print('finding shapefile...')
     shp_name = shpfilename(directory)
 
     # Make a layer from the shapefile
     arcpy.MakeFeatureLayer_management(shp_name, 'parcel_all_lyr')
 
     # Format SQL expression based on CVTs requested in config file
+    print('Correcting field names and aliases...')
     cvt_list_len = len(cfg['cvt_codes'])
     if cvt_list_len > 1:
         cvt_list_tup = tuple(cfg['cvt_codes'])
@@ -150,7 +149,8 @@ def geoenrich(directory):
     arcpy.MakeFeatureLayer_management('parcel_fc', 'parcel_lyr')
 
     # Convert CSV to GDB table
-    arcpy.TableToTable_conversion(cfg['csv']['uri'], gdb_path, 'bsa_export')
+    print('Finding table...')
+    arcpy.TableToTable_conversion(cfg['csv_uri'], gdb_path, 'bsa_export')
 
     # Add field to bsa_export table
     arcpy.AddField_management('bsa_export', 'PIN', "TEXT", field_alias='PIN', field_length=10,
@@ -162,6 +162,7 @@ def geoenrich(directory):
     arcpy.CalculateField_management('bsa_export', 'PIN', expression, 'PYTHON3')
 
     # Join parcel_lyr to bsa_export table
+    print('Joining table to parcel layer...')
     arcpy.AddJoin_management('parcel_lyr', 'PIN', 'bsa_export', 'PIN')
 
     # Make a new layer with joined data
@@ -170,10 +171,29 @@ def geoenrich(directory):
     # Change environment workspace
     arcpy.env.workspace = cfg['gis_env']['workspace']
 
-    # Copy features to Enterprise GDB
-    arcpy.CopyFeatures_management('final_lyr', cfg['gis_env']['out_fc_name'])
+    # Modify projection if necessary
+    print('Assessing coordinate system...')
+    in_spatial_ref = arcpy.Describe('final_lyr').spatialReference
+    out_spatial_ref = arcpy.SpatialReference(cfg['gis_env']['out_fc_proj'])
+    if in_spatial_ref == 'Unknown':
+        change_proj = False
+        print('Could not change projection due to undefined input coordinate system')
+    elif in_spatial_ref == out_spatial_ref:
+        change_proj = False
+        print('Input and output coordinate systems are the same')
+    else:
+        change_proj = True
+        print('Modifying output coordinate system...')
 
-    # Delete layers and file geodatabase
+    # Output final_lyr to enterprise geodatabase feature class
+    print('Copying features to geodatabase feature class...')
+    if not change_proj:
+        arcpy.CopyFeatures_management('final_lyr', cfg['gis_env']['out_fc_name'])
+    else:
+        arcpy.Project_management('final_lyr', cfg['gis_env']['out_fc_name'], out_spatial_ref)
+
+    # Delete temporary layers and temporary file geodatabase
+    print('Deleting temporary layers...')
     arcpy.Delete_management('parcel_lyr')
     arcpy.Delete_management('bsa_export')
     arcpy.Delete_management('final_lyr')
@@ -182,7 +202,7 @@ def geoenrich(directory):
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
-    return 'Successfully published feature class.'
+    return 'Successfully published feature class!'
 
 
 if __name__ == "__main__":
