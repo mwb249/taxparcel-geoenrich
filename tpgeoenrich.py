@@ -5,16 +5,12 @@ published to the geodatabase specified in the config.yml file.
 """
 
 import os
-import logging
 import yaml
 import requests
 import tempfile
 import shutil
 from zipfile import ZipFile
 import arcpy
-
-# Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
 # Set current working directory
 cwd = os.getcwd()
@@ -23,6 +19,7 @@ cwd = os.getcwd()
 with open(cwd + '/config.yml', 'r') as yaml_file:
     cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
+# Set variables for field corrections
 field_lst = [['REVISIONDA', 'REVISIONDATE', 'Revision Date'],
              ['CVTTAXCODE', 'CVTTAXCODE', 'CVT Tax Code'],
              ['CVTTAXDESC', 'CVTTAXDESCRIPTION', 'CVT Name'],
@@ -41,7 +38,7 @@ dropFields = ['OBJECTID', 'OBJECTID_1', 'Shapearea', 'Shapelen']
 
 
 def formatpin(pnum, relatedpnum):
-    """Format PIN from PNUM"""
+    """Formats a Parcel ID Number (PIN) from a BS&A PNUM."""
     try:
         if relatedpnum is None:
             p = pnum
@@ -50,41 +47,71 @@ def formatpin(pnum, relatedpnum):
         p = p.split('-')
         del p[0]
         p = ''.join(p)
-    finally:
+    except IndexError:
         p = None
     return p
 
 
-def geoenrich(resp):
-    """Takes zipped response from website, joins BS&A table data, then copies to a geodatabase feature class."""
-    # Create temporary directory
-    temp_dir = tempfile.mkdtemp()
+def shpfilename(directory):
+    """Reads directory, finds first shapefile in directory, returns the file name and path as a list of values."""
+    for file in os.listdir(directory):
+        if file.endswith('.shp') or file.endswith('.SHP'):
+            return file
+
+
+def getshpfile(directory):
+    """Requests and downloads zipped shapefile from specified open data website, unzips to temporary directory."""
+    # Make request to get zipped tax parcel shapefile
+    resp = requests.get(cfg['opendata_url'], allow_redirects=True, timeout=10.0)
 
     # Save zipfile to temporary directory
     zip_name = 'taxparcels.zip'
-    zip_path = os.path.join(temp_dir, zip_name)
+    zip_path = os.path.join(directory, zip_name)
     zip_file = open(zip_path, 'wb')
     zip_file.write(resp.content)
     zip_file.close()
 
+    # Print Message
+    print('Shapefile Downloaded...')
+
     # Open the zipfile in READ mode and extract all files to temporary directory
     with ZipFile(zip_path, 'r') as zip_file:
-        zip_file.extractall(temp_dir)
+        zip_file.extractall(directory)
+
+    # Print Message
+    print('Shapefile unzipped...')
+
+    # Delete zip file
     os.remove(zip_path)
+    return 'Shapefile deleted...'
+
+
+def cleanup(directory):
+    """Attempts to delete directory and all files within it."""
+    try:
+        shutil.rmtree(directory)
+    except OSError as e:
+        print("Error: %s : %s" % (directory, e.strerror))
+    return 'All temporary files deleted.'
+
+
+def geoenrich(directory):
+    """Takes zipped response from website, joins BS&A table data, then copies to a geodatabase feature class."""
+    # Set initial environment workspace
+    arcpy.env.workspace = directory
 
     # Set environment settings
-    arcpy.env.workspace = temp_dir
     arcpy.env.qualifiedFieldNames = False
     arcpy.env.overwriteOutput = cfg['gis_env']['overwrite_output']
 
-    # TODO: Pull shapefile name from directory
+    # Set variable to name of shapefile
+    shp_name = shpfilename(directory)
 
-    # Make a layer from the feature class (shapefile)
-    arcpy.MakeFeatureLayer_management('OC_Tax_Parcels__Public_.shp', 'parcel_all_lyr')
+    # Make a layer from the shapefile
+    arcpy.MakeFeatureLayer_management(shp_name, 'parcel_all_lyr')
 
-    # Format SQL expression
+    # Format SQL expression based on CVTs requested in config file
     cvt_list_len = len(cfg['cvt_codes'])
-
     if cvt_list_len > 1:
         cvt_list_tup = tuple(cfg['cvt_codes'])
         sql = "CVTTAXCODE IN {0}".format(cvt_list_tup)
@@ -97,17 +124,17 @@ def geoenrich(resp):
     arcpy.SelectLayerByAttribute_management("parcel_all_lyr", "NEW_SELECTION", sql)
     arcpy.MakeFeatureLayer_management('parcel_all_lyr', 'parcel_sel_lyr')
 
-    # Create temporary geodatabase and set workspace
+    # Create temporary geodatabase and set path variables
     gdb_name = 'temp.gdb'
-    arcpy.CreateFileGDB_management(temp_dir, gdb_name)
-    gdb_path = os.path.join(temp_dir, gdb_name)
+    arcpy.CreateFileGDB_management(directory, gdb_name)
+    gdb_path = os.path.join(directory, gdb_name)
     fc_path = os.path.join(gdb_path, 'parcel_fc')
 
-    # Copy features to TEMP GDB
+    # Copy features to temporary geodatabase
     arcpy.CopyFeatures_management('parcel_sel_lyr', fc_path)
 
     # Delete shapefile
-    arcpy.Delete_management('OC_Tax_Parcels__Public_.shp')
+    arcpy.Delete_management(shp_name)
 
     # Change environment workspace
     arcpy.env.workspace = gdb_path
@@ -155,21 +182,18 @@ def geoenrich(resp):
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
-    # Delete temporary directory
-    try:
-        shutil.rmtree(temp_dir)
-    except OSError as e:
-        print("Error: %s : %s" % (temp_dir, e.strerror))
-
-    return 'Success'
+    return 'Successfully published feature class.'
 
 
 if __name__ == "__main__":
+    # Create temporary directory
+    temp_dir = tempfile.mkdtemp()
+
     # Make request to get zipped tax parcel shapefile
-    response = requests.get(cfg['opendata_url'], allow_redirects=True, timeout=10.0)
+    print(getshpfile(temp_dir))
 
     # GeoEnrich requested tax parcel data, publish as a new feature class in a geodatabase
-    status = geoenrich(response)
+    print(geoenrich(temp_dir))
 
-    # Output final status
-    print(status)
+    # Cleanup temporary files
+    print(cleanup(temp_dir))
