@@ -54,11 +54,11 @@ Open the Windows Command Prompt as an Administrator.
 Change the working directory to the ArcGIS Python scripts folder. This will be slightly different depending on if you 
 are using Tax Parcel Geoenrich with ArcGIS Pro or ArcGIS Server.
 
-ArcGIS Server
+**ArcGIS Server**
 ```bash
 cd <install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\Scripts
 ```
-ArcGIS Pro
+**ArcGIS Pro**
 ```bash
 cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 ```
@@ -66,11 +66,11 @@ cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 Use conda to clone the default Python environment, giving it a new name. Again, this command will be different 
 depending on an ArcGIS Pro or Server installation.
 
-ArcGIS Server
+**ArcGIS Server**
 ```bash
 conda create --clone arcgispro-py3 --prefix "<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
 ```
-ArcGIS Pro
+**ArcGIS Pro**
 ```bash
 conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
 ```
