@@ -3,35 +3,38 @@
 Tax Parcel Geoenrich is a Python module that automates the process of downloading and enriching openly available 
 geospatial data. Out of the box it enriches public tax parcel data with reports exported from the 
 [BS&A Assessing/Equalization](https://www.bsasoftware.com/solutions/assessing-property-tax/assessingequalization/) 
-application. The result is saved as an ArcGIS feature class in a file or enterprise geodatabase.
+application. The result is saved as an ArcGIS geodatabase feature class.
 
 Tax Parcel Geoenrich is designed as a stand-alone script that can be scheduled to run at specific intervals using Cron 
 or Windows Task Scheduler. It makes use of the 
 [ArcPy site package](https://pro.arcgis.com/en/pro-app/arcpy/get-started/what-is-arcpy-.htm) and 
-[ArcGIS API for Python](https://developers.arcgis.com/python/). For that reason, Tax Parcel Geoenrich requires a 
-licensed installation of Esri's [ArcGIS Pro](https://www.esri.com/en-us/arcgis/products/arcgis-pro/overview) or 
+[ArcGIS API for Python](https://developers.arcgis.com/python/). For that reason, Tax Parcel Geoenrich is required to 
+run on a machine that has a licensed installation of Esri's 
+[ArcGIS Pro](https://www.esri.com/en-us/arcgis/products/arcgis-pro/overview) or 
 [ArcGIS Enterprise](https://enterprise.arcgis.com/en/) software.
 
 ## Installation
 
 ### Requirements
 Because Tax Parcel Geoenrich uses the ArcPy site package, it can only be run on a machine that has a licensed version 
-of Esri's ArcGIS Pro or ArcGIS Enterprise installed. The installation instructions are Windows OS centric, however, 
-with some modification, it should be possible to run Tax Parcel GeoEnrich from a Linux machine with ArcGIS Enterprise 
-installed. 
+of Esri's ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
+installation instructions are Windows OS centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
+machine with components ArcGIS Server installed. 
 
 ### Download Tax Parcel Geoenrich
-Download and install [Git](https://git-scm.com/downloads). The machine will need to have a licensed version of ArcGIS 
-Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed.
+Download and install [Git](https://git-scm.com/downloads).
 
-Use the Git Bash CLI to download the latest release of Tax Parcel Geoenrich. To do this, open the Git Bash CLI and 
-change the working directory to the folder where Tax Parcel Geoenrich script will be stored.
+Use the Git command line interface (CLI) to download the latest release of Tax Parcel Geoenrich. To do this, open the 
+Git CLI and change the working directory to the folder where Tax Parcel Geoenrich script will be stored.
 ```bash
-$ cd /c/Users/<user>/<python_scripts>
+cd /c/Users/<user>/<python_scripts>
 ```
 Clone the Tax Parcel Geoenrich to the local machine.
 ```bash
-$ git clone https://github.com/mwb249/taxparcel-geoenrich.git
+git clone https://github.com/mwb249/taxparcel-geoenrich.git
+```
+The output should look like this:
+```bash
 Cloning into 'taxparcel-geoenrich'...
 remote: Enumerating objects: 36, done.
 remote: Counting objects: 100% (36/36), done.
@@ -75,8 +78,9 @@ Once the environment is created, activate it to install some additional modules.
 ```bash
 proswap taxparcel-geoenrich
 ```
+Use the requirements.txt file to install additional required modules
 ```bash
-conda install --file requirements.txt
+conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
 ```
 
 ## Usage
