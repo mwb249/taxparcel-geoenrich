@@ -2,7 +2,8 @@
 # WebGIS information
 webgis:
   profile: profile_somegis
-  f_serv_id: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  serv_folder:
+  serv_name:
 
 # Tax Parcel zipfile URL
 opendata_url: https://opendata.arcgis.com/datasets/xxxxxxxxxxxxxxxxxxxxxxxxxxxx.zip
