@@ -9,7 +9,7 @@ Tax Parcel Geoenrich is designed as a stand-alone script that can be scheduled t
 or Windows Task Scheduler. It makes use of the 
 [ArcPy site package](https://pro.arcgis.com/en/pro-app/arcpy/get-started/what-is-arcpy-.htm) and 
 [ArcGIS API for Python](https://developers.arcgis.com/python/). For that reason, Tax Parcel Geoenrich is required to 
-run on a machine that has a licensed installation of Esri's 
+run on a machine that has a licensed installation of Esri 
 [ArcGIS Pro](https://www.esri.com/en-us/arcgis/products/arcgis-pro/overview) or 
 [ArcGIS Enterprise](https://enterprise.arcgis.com/en/) software.
 
@@ -17,9 +17,9 @@ run on a machine that has a licensed installation of Esri's
 
 ### Requirements
 Because Tax Parcel Geoenrich uses the ArcPy site package, it can only be run on a machine that has a licensed version 
-of Esri's ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
-installation instructions are Windows OS centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
-machine with components ArcGIS Server installed. 
+of Esri ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
+installation instructions are Windows centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
+machine with ArcGIS Server installed. 
 
 ### Download Tax Parcel Geoenrich
 Download and install [Git](https://git-scm.com/downloads).
@@ -45,13 +45,14 @@ Unpacking objects: 100% (36/36), done.
 
 ### Create Python Environment
 In order to use the ArcPy site package and the ArcGIS API for Python, you will need to create a cloned environment 
-based on the ArcGIS Pro conda environment that is installed with ArcGIS Pro or ArcGIS Enterprise. Click 
+based on the ArcGIS Pro conda environment that comes installed with ArcGIS Pro or ArcGIS Enterprise. Click 
 [here](https://enterprise.arcgis.com/en/server/latest/publish-services/windows/deploying-custom-python-packages.htm) to 
 learn more about deploying custom Python packages using ArcGIS software.
 
 Open the Windows Command Prompt as an Administrator.
 
-Change the working directory to the ArcGIS Python scripts folder.
+Change the working directory to the ArcGIS Python scripts folder. This will be slightly different depending on if you 
+are using Tax Parcel Geoenrich with ArcGIS Pro or ArcGIS Server.
 
 ArcGIS Server
 ```bash
@@ -62,7 +63,8 @@ ArcGIS Pro
 cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 ```
 
-Use conda to clone the default Python environment, giving it a new name.
+Use conda to clone the default Python environment, giving it a new name. Again, this command will be different 
+depending on an ArcGIS Pro or Server installation.
 
 ArcGIS Server
 ```bash
@@ -72,13 +74,13 @@ ArcGIS Pro
 ```bash
 conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
 ```
-It will take a few minutes to create the environment.
+It will take a few minutes to create the new environment.
 
 Once the environment is created, activate it to install some additional modules.
 ```bash
 proswap taxparcel-geoenrich
 ```
-Use the requirements.txt file to install additional required modules
+Use the requirements.txt file to install the additional required modules.
 ```bash
 conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
 ```
