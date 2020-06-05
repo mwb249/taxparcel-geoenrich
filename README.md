@@ -19,13 +19,13 @@ run on a machine that has a licensed installation of Esri
 Because Tax Parcel Geoenrich uses the ArcPy site package, it can only be run on a machine that has a licensed version 
 of Esri ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
 installation instructions are Windows centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
-machine with ArcGIS Server installed. 
+machine that has ArcGIS Server installed. 
 
 ### Download Tax Parcel Geoenrich
 Download and install [Git](https://git-scm.com/downloads).
 
 Use the Git command line interface (CLI) to download the latest release of Tax Parcel Geoenrich. To do this, open the 
-Git CLI and change the working directory to the folder where Tax Parcel Geoenrich script will be stored.
+Git CLI and change the working directory to the folder where the Tax Parcel Geoenrich files will be stored.
 ```bash
 cd /c/Users/<user>/<python_scripts>
 ```
