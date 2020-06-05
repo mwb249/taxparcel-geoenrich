@@ -16,7 +16,7 @@ run on a machine that has a licensed installation of Esri
 ## Installation
 
 ### Requirements
-Because Tax Parcel Geoenrich uses the ArcPy site package, it can only be run on a machine that has a licensed version 
+Tax Parcel Geoenrich uses the ArcPy site package and it can only be run on a machine that has a licensed version 
 of Esri ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
 installation instructions are Windows centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
 machine that has ArcGIS Server installed. 
@@ -33,7 +33,7 @@ Clone the Tax Parcel Geoenrich to the local machine.
 ```bash
 git clone https://github.com/mwb249/taxparcel-geoenrich.git
 ```
-The output should look like this:
+The output should look something like this:
 ```bash
 Cloning into 'taxparcel-geoenrich'...
 remote: Enumerating objects: 36, done.
@@ -64,7 +64,7 @@ cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 ```
 
 Use conda to clone the default Python environment, giving it a new name. Again, this command will be different 
-depending on an ArcGIS Pro or Server installation.
+depending on an ArcGIS Pro or ArcGIS Server installation.
 
 **ArcGIS Server**
 ```bash
