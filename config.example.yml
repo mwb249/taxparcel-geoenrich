@@ -4,6 +4,7 @@ webgis:
   profile: profile_somegis
   serv_folder:
   serv_name:
+  portal_item:
 
 # Tax Parcel zipfile URL
 opendata_url: https://opendata.arcgis.com/datasets/xxxxxxxxxxxxxxxxxxxxxxxxxxxx.zip
@@ -16,7 +17,7 @@ gis_env:
   # Projection Examples (match Esri's description):
   # NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)
   # WGS 1984 Web Mercator (auxiliary sphere)
-  out_fc_proj: NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)
+  out_fc_proj: WGS 1984 Web Mercator (auxiliary sphere)
 
 # List requested CVT codes below. Use quoted text (ex. 'J'). Remove all lines to request the entire dataset
 cvt_codes:

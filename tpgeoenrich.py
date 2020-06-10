@@ -11,14 +11,8 @@ from zipfile import ZipFile
 import arcpy
 import requests
 import yaml
+from datetime import datetime
 from arcgis.gis import GIS
-
-# Set current working directory
-cwd = os.getcwd()
-
-# Open config file
-with open(cwd + '/config.yml', 'r') as yaml_file:
-    cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
 # Set variables for field corrections
 field_lst_fc = [['REVISIONDA', 'REVISIONDATE', 'Revision Date'],
@@ -79,11 +73,11 @@ def shpfilename(directory):
             return file
 
 
-def getshpfile(directory):
+def getshpfile(directory, opendata_url):
     """Requests and downloads zipped shapefile from specified open data website, unzips to temporary directory."""
     # Make request to get zipped tax parcel shapefile
     print('Downloading zipped shapefile...')
-    resp = requests.get(cfg['opendata_url'], allow_redirects=True, timeout=10.0)
+    resp = requests.get(opendata_url, allow_redirects=True, timeout=10.0)
 
     # Save zipfile to temporary directory
     zip_name = 'taxparcels.zip'
@@ -111,41 +105,52 @@ def cleanup(directory):
     return 'All temporary files deleted.'
 
 
-def pushtogdb(final_lyr):
+def updatesummary(gis, portal_item):
+    """Update the summary field on the specified Portal item Overview page."""
+    flc_item = gis.content.get(portal_item)
+    now = datetime.now()
+    date = now.strftime('%B %d, %Y')
+    time = now.strftime('%I:%M %p')
+    snippet = 'The tax parcels were last updated on {} at {}.'.format(date, time)
+    flc_item.update(item_properties={'snippet': snippet})
+    print('Portal item summary updated')
+
+
+def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name):
     """Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
     restarted afterwards. """
 
     # Create connection to ArcGIS Portal
     print('Establishing connection to ArcGIS Enterprise Portal...')
-    gis = GIS(profile=cfg['webgis']['profile'])
+    gis = GIS(profile=profile)
 
     # List federated GIS servers, set variable for first server in list
     print('Finding federated GIS servers...')
     gis_server = gis.admin.servers.list()[0]
 
     # List all services for specified folder
-    services = gis_server.services.list(cfg['webgis']['serv_folder'])
+    services = gis_server.services.list(serv_folder)
 
     # Stop feature service
     service = None
     serv_stop = False
     for serv in services:
-        if serv.properties.serviceName == cfg['webgis']['serv_name']:
+        if serv.properties.serviceName == serv_name:
             print('Stopping feature service...')
             service = serv
             serv_stop = service.stop()
             print('Feature service stopped...')
 
     # Change environment workspace
-    arcpy.env.workspace = cfg['gis_env']['workspace']
+    arcpy.env.workspace = workspace
 
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
     # Output final_lyr to enterprise geodatabase feature class
     print('Copying features to geodatabase...')
-    arcpy.CopyFeatures_management(final_lyr, cfg['gis_env']['out_fc_name'])
+    arcpy.CopyFeatures_management(final_lyr, out_fc_name)
 
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
@@ -155,8 +160,11 @@ def pushtogdb(final_lyr):
         print('Starting feature service...')
         service.start()
 
+    # Update the Portal item summary
+    updatesummary(gis, cfg_portal_item)
 
-def geoenrich(directory):
+
+def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     """Intakes a tax parcel shapefile, modifies fields, reprojects, then joins to BS&A table data. The final layer is
     copied to a geodatabase feature class."""
     # Set initial environment workspace
@@ -165,7 +173,7 @@ def geoenrich(directory):
 
     # Set environment settings
     arcpy.env.qualifiedFieldNames = False
-    arcpy.env.overwriteOutput = cfg['gis_env']['overwrite_output']
+    arcpy.env.overwriteOutput = overwrite_output
 
     # Set variable to name of shapefile
     print('Finding shapefile...')
@@ -176,12 +184,12 @@ def geoenrich(directory):
 
     # Format SQL expression based on CVTs requested in config file
     print('Correcting field names and aliases...')
-    cvt_list_len = len(cfg['cvt_codes'])
+    cvt_list_len = len(cvt_codes)
     if cvt_list_len > 1:
-        cvt_list_tup = tuple(cfg['cvt_codes'])
+        cvt_list_tup = tuple(cvt_codes)
         sql = "CVTTAXCODE IN {}".format(cvt_list_tup)
     elif cvt_list_len == 1:
-        sql = "CVTTAXCODE = '{}'".format(cfg['cvt_codes'][0])
+        sql = "CVTTAXCODE = '{}'".format(cvt_codes[0])
     else:
         sql = 'CVTTAXCODE = ALL'
 
@@ -214,7 +222,7 @@ def geoenrich(directory):
     # Modify projection if necessary
     print('Assessing coordinate system...')
     in_spatial_ref = arcpy.Describe('parcel_fc').spatialReference
-    out_spatial_ref = arcpy.SpatialReference(cfg['gis_env']['out_fc_proj'])
+    out_spatial_ref = arcpy.SpatialReference(out_fc_proj)
     if in_spatial_ref.name == 'Unknown':
         change_proj = False
         print('Could not change projection due to undefined input coordinate system')
@@ -237,7 +245,7 @@ def geoenrich(directory):
 
     # Convert CSV to GDB table
     print('Finding table...')
-    arcpy.TableToTable_conversion(cfg['csv_uri'], gdb_path, 'bsa_export')
+    arcpy.TableToTable_conversion(csv_uri, gdb_path, 'bsa_export')
 
     # Create empty table to load bsa_export data
     arcpy.CreateTable_management(gdb_path, 'join_table')
@@ -280,7 +288,7 @@ def geoenrich(directory):
     arcpy.AddJoin_management('parcel_lyr', 'PIN', 'join_table', 'PIN')
 
     # Modify coordinate system and copy to geodatabase
-    pushtogdb('parcel_lyr')
+    pushtogdb('parcel_lyr', cfg_profile, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
 
     # Delete temporary layers and temporary file geodatabase
     print('Deleting temporary layers...')
@@ -295,14 +303,34 @@ def geoenrich(directory):
 
 
 if __name__ == "__main__":
+    # Set current working directory
+    cwd = os.getcwd()
+
+    # Open config file
+    with open(cwd + '/config.yml', 'r') as yaml_file:
+        cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
+
+    # Set variables based on values from config file
+    cfg_profile = cfg['webgis']['profile']
+    cfg_serv_folder = cfg['webgis']['serv_folder']
+    cfg_serv_name = cfg['webgis']['serv_name']
+    cfg_portal_item = cfg['webgis']['portal_item']
+    cfg_opendata_url = cfg['opendata_url']
+    cfg_workspace = cfg['gis_env']['workspace']
+    cfg_overwrite_output = cfg['gis_env']['overwrite_output']
+    cfg_out_fc_name = cfg['gis_env']['out_fc_name']
+    cfg_out_fc_proj = cfg['gis_env']['out_fc_proj']
+    cfg_cvt_codes = cfg['cvt_codes']
+    cfg_csv_uri = cfg['csv_uri']
+
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
 
     # Make request to get zipped tax parcel shapefile
-    print(getshpfile(temp_dir))
+    print(getshpfile(temp_dir, cfg_opendata_url))
 
     # GeoEnrich requested tax parcel data, publish as a new feature class in a geodatabase
-    print(geoenrich(temp_dir))
+    print(geoenrich(temp_dir, cfg_overwrite_output, cfg_cvt_codes, cfg_out_fc_proj, cfg_csv_uri))
 
     # Cleanup temporary files
     print(cleanup(temp_dir))
