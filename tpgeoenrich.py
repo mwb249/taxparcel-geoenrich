@@ -106,7 +106,7 @@ def cleanup(directory):
 
 
 def updatesummary(gis, portal_item):
-    """Update the summary field on the specified Portal item Overview page."""
+    """Updates the summary field on the specified Portal item Overview page."""
     flc_item = gis.content.get(portal_item)
     now = datetime.now()
     date = now.strftime('%B %d, %Y')
