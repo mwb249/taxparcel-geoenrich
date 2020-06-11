@@ -48,7 +48,9 @@ field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
                  ['ownerstate', 'TEXT', 'Owner State', 2, 'ownerstate'],
                  ['ownerzip', 'TEXT', 'Owner Zip', 10, 'ownerzip'],
                  ['ownercountry', 'TEXT', 'Owner Country', 90, 'ownercountry'],
-                 ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode']]
+                 ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode'],
+                 ['bsaurl', 'TEXT', 'BSA URL', 350, None],
+                 ['dataexport', 'DATE', 'Data Export', None, None]]
 
 
 def formatpin(pnum, relatedpnum):
@@ -64,6 +66,23 @@ def formatpin(pnum, relatedpnum):
     except IndexError:
         p = None
     return p
+
+
+def formatbsaurl(pnum):
+    """Formats a BS&A Online URL Request based on the PNUM."""
+    if pnum:
+        pnum_split = pnum.split('-')
+        cvt_code = pnum_split[0]
+    else:
+        cvt_code = None
+    cvt_id_dict = {'J ': '268', '70': '385', '68': '1655', 'O ': '1637'}
+    url_endpoint = 'https://bsaonline.com/SiteSearch/SiteSearchDetails'
+    params = {'SearchCategory': 'Parcel+Number',
+              'ReferenceKey': pnum,
+              'SearchText': pnum,
+              'uid': cvt_id_dict[cvt_code]}
+    r = requests.Request('GET', url_endpoint, params=params).prepare()
+    return r.url
 
 
 def shpfilename(directory):
@@ -278,10 +297,16 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     # Append the bsa_export data into the join_table
     arcpy.Append_management('bsa_export', 'join_table', schema_type='NO_TEST', field_mapping=field_mappings)
 
-    expression = 'formatpin(!PNUM!, !RELATEDPNUM!)'
+    # Create expressions for field calculations
+    pin_exp = 'formatpin(!PNUM!, !RELATEDPNUM!)'
+    bsa_url_exp = 'formatbsaurl(!PNUM!)'
+    data_export_exp = 'datetime.now()'
 
-    # Calculate field
-    arcpy.CalculateField_management('join_table', 'PIN', expression, 'PYTHON3')
+    # Calculate fields
+    print('Calculating fields...')
+    arcpy.CalculateField_management('join_table', 'PIN', pin_exp, 'PYTHON3')
+    arcpy.CalculateField_management('join_table', 'BSAURL', bsa_url_exp, 'PYTHON3')
+    arcpy.CalculateField_management('join_table', 'DATAEXPORT', data_export_exp, 'PYTHON3')
 
     # Join parcel_lyr to bsa_export table
     print('Joining table to parcel layer...')

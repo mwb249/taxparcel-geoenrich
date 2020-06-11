@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
+"""
+Docstring...
+"""
 
-import arcpy
+import importlib
+import tpgeoenrich
+importlib.reload(tpgeoenrich)
 
 
 class Toolbox(object):
