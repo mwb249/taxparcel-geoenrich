@@ -85,6 +85,46 @@ Use the requirements.txt file to install the additional required modules.
 conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
 ```
 
+### Secure Your Portal for ArcGIS Credentials
+Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to the Web GIS and stores all the authorization 
+credentials (except the password) in the user's home directory in an unencrypted config file named ```.arcgisprofile```
+. The profile securely stores the password in an OS specific password manager through the keyring python module. More 
+information can be found 
+[here](https://developers.arcgis.com/python/guide/working-with-different-authentication-schemes/#Storing-your-credentials-locally).
+
+If necessary, reopen the Windows Command Prompt and change the working directory to the ArcGIS Python scripts folder.
+
+Activate the taxparcel-geoenrich environment.
+```bash
+proswap taxparcel-geoenrich
+```
+Open a Python Shell.
+```bash
+python
+```
+You should see a Python Prompt: ```>>>```
+
+Run the following commands in the Python Prompt, replace the parameters with your own.
+```python
+from arcgis.gis import GIS
+GIS('https://gis.someportal.com/portal', 'some_username', 'some_password', profile='new_profile_name')
+```
+Use the ```exit()``` command to exit the Python Prompt.
+
+### Setup Task Scheduler
+1. Open the Task Scheduler on the computer that is hosting the scripts.
+2. Click Action > Create Task and name your task.
+3. Click the Action tab and click New.
+4. Set Action to Start a Program.
+5. Browse to the location of your Python 3 installation (for example, 
+<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich\python.exe).
+6. In the Add arguments text box, type the name of the script (tpgeoenrich.py).
+7. In the Start in text box, type the path to the folder where your script is and click OK.
+8. Click the Trigger tab, click New, and set a schedule for your task.
+9. Click OK. When the trigger occurs, the scripts will begin scanning the configured layers and, for each one, 
+processing (in order) configurations for generating identifiers, enriching reports, moderating reports, and sending 
+emails.
+
 ## Usage
 
 ## Contributing
