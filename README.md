@@ -115,7 +115,7 @@ Use the ```exit()``` command to exit the Python Prompt.
 Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Rename 
 the file ```config.yml```.
 
-Right-click on newly renamed the ```config.yml``` file and choose open with a text editor (*Notepad* or *Notepad++* 
+Right-click on the newly renamed ```config.yml``` file and choose open with a text editor (*Notepad* or *Notepad++* 
 will work fine).
 
 ### Setup Task Scheduler
