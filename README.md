@@ -63,8 +63,8 @@ cd <install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\Scripts
 cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 ```
 
-Use conda to clone the default Python environment, giving it a new name. Again, this command will be different 
-depending on an ArcGIS Pro or ArcGIS Server installation.
+Use conda to clone the default Python environment, giving it a new name. Again, the path will be different depending 
+on an ArcGIS Pro or ArcGIS Server installation.
 
 **ArcGIS Server**
 ```bash
@@ -112,10 +112,10 @@ GIS('https://gis.someportal.com/portal', 'some_username', 'some_password', profi
 Use the ```exit()``` command to exit the Python Prompt.
 
 ### Input Your Configuration Settings
-Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Copy 
-the file and rename the copy ```config.yml```.
+Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Create 
+ a copy of the file and name the copy, ```config.yml```.
 
-Right-click on ```config.yml``` and choose *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
+Right-click on ```config.yml``` and click *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
 
 ### Setup Task Scheduler
 1. Open the *Windows Task Scheduler*.
