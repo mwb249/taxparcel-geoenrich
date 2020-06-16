@@ -94,7 +94,7 @@ information can be found
 
 If necessary, reopen the Windows Command Prompt and change the working directory to the ArcGIS Python scripts folder.
 
-Activate the taxparcel-geoenrich environment.
+Activate the taxparcel-geoenrich Python environment.
 ```bash
 proswap taxparcel-geoenrich
 ```
@@ -104,15 +104,22 @@ python
 ```
 You should see a Python Prompt: ```>>>```
 
-Run the following commands in the Python Prompt, replace the parameters with your own.
+Run the following commands in the Python Prompt, replace the GIS parameters with your own.
 ```python
 from arcgis.gis import GIS
 GIS('https://gis.someportal.com/portal', 'some_username', 'some_password', profile='new_profile_name')
 ```
 Use the ```exit()``` command to exit the Python Prompt.
 
+### Edit the config.example.yml file.
+Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Rename 
+the file ```config.yml```.
+
+Right-click on newly renamed the ```config.yml``` file and choose open with a text editor (*Notepad* or *Notepad++* 
+will work fine).
+
 ### Setup Task Scheduler
-1. Open the Windows Task Scheduler.
+1. Open the *Windows Task Scheduler*.
 2. Click Action > Create Task and name the task.
 3. Click the Action tab and click New.
 4. Set Action to Start a Program.
