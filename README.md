@@ -18,7 +18,7 @@ run on a machine that has a licensed installation of Esri
 ### Requirements
 Tax Parcel Geoenrich uses the ArcPy site package and it can only be run on a machine that has a licensed version 
 of Esri ArcGIS Pro or ArcGIS Server (the back-end server software component of ArcGIS Enterprise) installed. The 
-installation instructions are Windows centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
+installation instructions are Windows OS centric, however, it is possible to run Tax Parcel GeoEnrich from a Linux 
 machine that has ArcGIS Server installed. 
 
 ### Download Tax Parcel Geoenrich
@@ -117,8 +117,8 @@ Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-cl
 
 Right-click on ```config.yml``` and click *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
 
-### Setup Task Scheduler
-1. Open the *Windows Task Scheduler*.
+### Setup Windows Task Scheduler
+1. Open Windows *Task Scheduler*.
 2. Click Action > Create Task and name the task.
 3. Click the Action tab and click New.
 4. Set Action to Start a Program.
