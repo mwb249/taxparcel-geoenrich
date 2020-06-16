@@ -231,7 +231,7 @@ def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name
 
     # Assign domains to fields
     print('Assigning domains to fields...')
-    field_domain_lst = [['classcode', 'ClassDescription'], ['schooltaxcode', 'SchoolDescription']]
+    field_domain_lst = [['classcode', 'taxClassDESCR'], ['schooltaxcode', 'taxSchoolDESCR']]
     for domain in field_domain_lst:
         arcpy.AssignDomainToField_management(out_fc_name, domain[0], domain[1])
 
