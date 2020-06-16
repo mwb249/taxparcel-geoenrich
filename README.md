@@ -85,7 +85,7 @@ Use the requirements.txt file to install the additional required modules.
 conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
 ```
 
-### Secure Your Portal for ArcGIS Credentials
+### Secure Your *Portal for ArcGIS* Credentials
 Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to the Web GIS and stores all the authorization 
 credentials (except the password) in the user's home directory in an unencrypted config file named ```.arcgisprofile```
 . The profile securely stores the password in an OS specific password manager through the keyring python module. More 
@@ -111,12 +111,11 @@ GIS('https://gis.someportal.com/portal', 'some_username', 'some_password', profi
 ```
 Use the ```exit()``` command to exit the Python Prompt.
 
-### Edit the config.example.yml file.
-Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Rename 
-the file ```config.yml```.
+### Input Your Configuration Settings
+Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Copy 
+the file and rename the copy ```config.yml```.
 
-Right-click on the newly renamed ```config.yml``` file and choose *Open with...*, select a text editor of your choice 
-(*Notepad* or *Notepad++* work fine).
+Right-click on ```config.yml``` and choose *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
 
 ### Setup Task Scheduler
 1. Open the *Windows Task Scheduler*.
@@ -131,12 +130,8 @@ Right-click on the newly renamed ```config.yml``` file and choose *Open with...*
 8. Click the Trigger tab, click New, and set a schedule for your task.
 9. Click OK.
 
-## Usage
-
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
