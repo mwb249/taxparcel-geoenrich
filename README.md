@@ -86,9 +86,9 @@ conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requir
 ```
 
 ### Secure Your *ArcGIS Enterprise Portal* Credentials
-Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to the Web GIS and stores all the authorization 
-credentials (except the password) in the user's home directory in an unencrypted config file named ```.arcgisprofile```
-. The profile securely stores the password in an OS specific password manager through the keyring python module. More 
+Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to a Web GIS. Creating a profile stores all the 
+authorization credentials (except the password) in the user's home directory in an unencrypted config file named 
+```.arcgisprofile```. The password is stored in an OS specific password manager through the keyring python module. More 
 information can be found 
 [here](https://developers.arcgis.com/python/guide/working-with-different-authentication-schemes/#Storing-your-credentials-locally).
 
