@@ -85,7 +85,7 @@ Use the requirements.txt file to install the additional required modules.
 conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
 ```
 
-### Secure Your *Portal for ArcGIS* Credentials
+### Secure Your *ArcGIS Enterprise Portal* Credentials
 Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to the Web GIS and stores all the authorization 
 credentials (except the password) in the user's home directory in an unencrypted config file named ```.arcgisprofile```
 . The profile securely stores the password in an OS specific password manager through the keyring python module. More 
