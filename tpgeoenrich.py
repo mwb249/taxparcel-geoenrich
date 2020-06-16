@@ -14,33 +14,33 @@ import yaml
 from datetime import datetime
 from arcgis.gis import GIS
 
-# Set variables for field corrections
+# Tax parcel fields
+# List order: Shapefile Field Name, New Field Name, New Field Alias
 field_lst_fc = [['REVISIONDA', 'REVISIONDATE', 'Revision Date'],
                 ['CVTTAXCODE', 'CVTTAXCODE', 'CVT Tax Code'],
                 ['CVTTAXDESC', 'CVTTAXDESCRIPTION', 'CVT Name'],
-                ['SITEADDRES', 'SITEADDRESS', 'Site Address'],
-                ['SITECITY', 'SITECITY', 'Site City'],
+                ['SITEADDRES', 'SITEADDRESS_OC', 'Site Address (OC)'],
                 ['SITESTATE', 'SITESTATE', 'Site State'],
-                ['SITEZIP5', 'SITEZIP5', 'Site Zip 5'],
                 ['ASSESSEDVA', 'ASSESSEDVALUE', 'Assessed Value'],
                 ['TAXABLEVAL', 'TAXABLEVALUE', 'Taxable Value'],
                 ['NUM_BEDS', 'NUM_BEDS', 'Number of Bedrooms'],
                 ['NUM_BATHS', 'NUM_BATHS', 'Number of Bathrooms'],
                 ['STRUCTURE_', 'STRUCTURE_DESC', 'Structure Type'],
-                ['LIVING_ARE', 'LIVING_AREA_SQFT', 'living Area']]
+                ['LIVING_ARE', 'LIVING_AREA_SQFT', 'Living Area']]
 
-dropFields_fc = ['OBJECTID', 'OBJECTID_1', 'Shapearea', 'Shapelen']
-
+# BS&A table conversion
+# List order: Field Name, Field Type, Field Alias, Field Length, BS&A Field Name
 field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
-                 ['pnum', 'TEXT', 'Pnum', 20, 'pnum'],
+                 ['pnum', 'TEXT', 'Parcel Number', 20, 'pnum'],
                  ['neighborhoodcode', 'TEXT', 'Neighborhood Code', 5, 'ecftbl'],
                  ['classcode', 'TEXT', 'Class Code', 3, 'propclass'],
                  ['schooltaxcode', 'TEXT', 'School Tax Code', 5, 'schooldist'],
-                 ['relatedpnum', 'TEXT', 'Related Pnum', 20, 'relatedpnum'],
-                 ['propstreetcombined', 'TEXT', 'Property Street Combined', 350, 'propstreetcombined'],
-                 ['propaddrnum', 'DOUBLE', 'Property Address Number', None, 'propaddrnum'],
-                 ['propstreetname', 'TEXT', 'Property Street Name', 350, 'propstreetname'],
-                 ['propzip', 'TEXT', 'Property Zip Code', 10, 'propzip'],
+                 ['relatedpnum', 'TEXT', 'Related Parcel Number', 20, 'relatedpnum'],
+                 ['propstreetcombined', 'TEXT', 'Site Address (RH)', 350, 'propstreetcombined'],
+                 ['propaddrnum', 'DOUBLE', 'Site Address Number', None, 'propaddrnum'],
+                 ['propstreetname', 'TEXT', 'Site Street Name', 350, 'propstreetname'],
+                 ['propcity_RH', 'TEXT', 'Site City', 15, 'propcity'],
+                 ['propzip', 'TEXT', 'Site Zip Code', 10, 'propzip'],
                  ['ownername1', 'TEXT', 'Owner Name 1', 180, 'ownername1'],
                  ['ownername2', 'TEXT', 'Owner Name 2', 180, 'ownername2'],
                  ['ownerstreetaddr', 'TEXT', 'Owner Street Address', 350, 'ownerstreetaddr'],
@@ -49,8 +49,20 @@ field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
                  ['ownerzip', 'TEXT', 'Owner Zip', 10, 'ownerzip'],
                  ['ownercountry', 'TEXT', 'Owner Country', 90, 'ownercountry'],
                  ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode'],
-                 ['bsaurl', 'TEXT', 'BSA URL', 350, None],
+                 ['bsaurl', 'TEXT', 'BS&A URL', 350, None],
                  ['dataexport', 'DATE', 'Data Export', None, None]]
+
+# Tax parcel drop fields
+dropFields_fc = ['OBJECTID', 'OBJECTID_1', 'SITECITY', 'SITEZIP5', 'Shapearea', 'Shapelen']
+dropFields_fc_final = ['OBJECTID', 'PIN_1']
+
+# Final field order
+final_field_order = ['pnum', 'PIN', 'relatedpnum', 'REVISIONDATE', 'CVTTAXCODE', 'CVTTAXDESCRIPTION',
+                     'propstreetcombined', 'SITEADDRESS_OC', 'propaddrnum', 'propstreetname', 'propcity_RH',
+                     'SITESTATE', 'propzip', 'ownername1', 'ownername2', 'ownerstreetaddr', 'ownercity', 'ownerstate',
+                     'ownerzip', 'ownercountry', 'exemptcode', 'classcode', 'schooltaxcode', 'neighborhoodcode',
+                     'ASSESSEDVALUE', 'TAXABLEVALUE', 'bsaurl', 'NUM_BEDS', 'NUM_BATHS', 'STRUCTURE_DESC',
+                     'LIVING_AREA_SQFT', 'dataexport']
 
 
 def formatpin(pnum, relatedpnum):
@@ -132,13 +144,59 @@ def updatesummary(gis, portal_item):
     time = now.strftime('%I:%M %p')
     snippet = 'The tax parcels were last updated on {} at {}.'.format(date, time)
     flc_item.update(item_properties={'snippet': snippet})
-    print('Portal item summary updated')
+    print('Portal item summary updated...')
+
+
+def reorderfields(table, out_table, field_order, add_missing=True):
+    """
+    Reorders fields in input feature class / table
+    :table:         input table (fc, table, layer, etc)
+    :out_table:     output table (fc, table, layer, etc)
+    :field_order:   order of fields (objectid, shape not necessary)
+    :add_missing:   add missing fields to end if True (leave out if False)
+    -> path to output table
+    """
+    existing_fields = arcpy.ListFields(table)
+    existing_field_names = [field.name for field in existing_fields]
+
+    existing_mapping = arcpy.FieldMappings()
+    existing_mapping.addTable(table)
+
+    new_mapping = arcpy.FieldMappings()
+
+    def add_mapping(field_name):
+        mapping_index = existing_mapping.findFieldMapIndex(field_name)
+
+        # required fields (OBJECTID, etc) will not be in existing mappings
+        # they are added automatically
+        if mapping_index != -1:
+            field_map = existing_mapping.fieldMappings[mapping_index]
+            new_mapping.addFieldMap(field_map)
+
+    # add user fields from field_order
+    for f_name in field_order:
+        if f_name not in existing_field_names:
+            raise Exception("Field: {0} not in {1}".format(f_name, table))
+
+        add_mapping(f_name)
+
+    # add missing fields at end
+    if add_missing:
+        missing_fields = [f for f in existing_field_names if f not in field_order]
+        for f_name in missing_fields:
+            add_mapping(f_name)
+
+    # use merge with single input just to use new field_mappings
+    arcpy.Merge_management(table, out_table, new_mapping)
+    return out_table
 
 
 def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name):
-    """Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
+    """
+    Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
-    restarted afterwards. """
+    restarted afterwards.
+    """
 
     # Create connection to ArcGIS Portal
     print('Establishing connection to ArcGIS Enterprise Portal...')
@@ -170,6 +228,15 @@ def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name
     # Output final_lyr to enterprise geodatabase feature class
     print('Copying features to geodatabase...')
     arcpy.CopyFeatures_management(final_lyr, out_fc_name)
+
+    # Assign domains to fields
+    print('Assigning domains to fields...')
+    field_domain_lst = [['classcode', 'ClassDescription'], ['schooltaxcode', 'SchoolDescription']]
+    for domain in field_domain_lst:
+        arcpy.AssignDomainToField_management(out_fc_name, domain[0], domain[1])
+
+    print('Altering ObjectID alias...')
+    arcpy.AlterField_management(out_fc_name, 'OBJECTID', new_field_alias='OBJECTID')
 
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
@@ -312,13 +379,20 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     print('Joining table to parcel layer...')
     arcpy.AddJoin_management('parcel_lyr', 'PIN', 'join_table', 'PIN')
 
-    # Modify coordinate system and copy to geodatabase
-    pushtogdb('parcel_lyr', cfg_profile, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
+    # Reorder fields
+    print('Reordering fields...')
+    arcpy.CopyFeatures_management('parcel_lyr', 'parcel_fc_join')
+    reorderfields('parcel_fc_join', 'parcel_fc_ordered', final_field_order)
+    arcpy.DeleteField_management('parcel_fc_ordered', dropFields_fc_final)
+    arcpy.MakeFeatureLayer_management('parcel_fc_ordered', 'final_lyr')
+
+    # Copy to geodatabase
+    pushtogdb('final_lyr', cfg_profile, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
 
     # Delete temporary layers and temporary file geodatabase
     print('Deleting temporary layers...')
 
-    arcpy.Delete_management(r"'parcel_lyr';'bsa_export';'join_table'")
+    arcpy.Delete_management(r"'parcel_lyr';'bsa_export';'join_table';'final_lyr'")
     arcpy.Delete_management(gdb_path)
 
     # Clear environment workspace cache
