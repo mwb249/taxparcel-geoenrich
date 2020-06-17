@@ -42,6 +42,7 @@ remote: Compressing objects: 100% (28/28), done.
 remote: Total 36 (delta 16), reused 24 (delta 7), pack-reused 0
 Unpacking objects: 100% (36/36), done.
 ```
+You can close the Git CLI.
 
 ### Create Python Environment
 In order to use the ArcPy site package and the ArcGIS API for Python, you will need to create a cloned environment 
@@ -76,13 +77,11 @@ conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\Pro\bin\Pyt
 ```
 It will take a few minutes to create the new environment.
 
-Once the environment is created, activate it to install some additional modules.
+Once the environment is created, activate it to update and install the PyYAML package.
 ```bash
 proswap taxparcel-geoenrich
-```
-Use the requirements.txt file to install the additional required modules.
-```bash
-conda install --file C:/Users/<user>/<python_scripts>/taxparcel-geoenrich/requirements.txt
+conda update --all
+conda install -y pyyaml
 ```
 
 ### Secure Your *ArcGIS Enterprise Portal* Credentials
@@ -108,6 +107,10 @@ Run the following commands in the Python Prompt, replace the GIS parameters with
 ```python
 from arcgis.gis import GIS
 GIS('https://gis.someportal.com/portal', 'some_username', 'some_password', profile='new_profile_name')
+```
+The output should look something like this:
+```
+GIS @ https://gis.indtwp.com/portal version:5.1
 ```
 Use the ```exit()``` command to exit the Python Prompt.
 
