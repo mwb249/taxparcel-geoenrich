@@ -130,7 +130,7 @@ Right-click on ```config.yml``` and click *Open with...*, choose a text editor (
     - ArcGIS Pro: C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich\python.exe
 6. In the Add arguments text box, type the name of the script (tpgeoenrich.py).
 7. In the Start in text box, type the path to the folder where your script is located and click OK.
-8. Click the Trigger tab, click New, and set a schedule for your task.
+8. Click the *Triggers* tab, click New, and set a schedule for your task.
 9. Click OK.
 
 ### Updating Tax Parcel Geoenrich to the Latest Version
