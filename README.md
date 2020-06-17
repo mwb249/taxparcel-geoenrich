@@ -29,7 +29,7 @@ Git CLI and change the working directory to the folder where the Tax Parcel Geoe
 ```bash
 cd /c/Users/<user>/<python_scripts>
 ```
-Clone the Tax Parcel Geoenrich to the local machine.
+Clone the latest version of Tax Parcel Geoenrich to the local machine.
 ```bash
 git clone https://github.com/mwb249/taxparcel-geoenrich.git
 ```
@@ -132,6 +132,13 @@ Right-click on ```config.yml``` and click *Open with...*, choose a text editor (
 7. In the Start in text box, type the path to the folder where your script is located and click OK.
 8. Click the Trigger tab, click New, and set a schedule for your task.
 9. Click OK.
+
+### Updating Tax Parcel Geoenrich to the Latest Version
+To update Tax Parcel Geoenrich to the latest version, open the Git CLI and change the working directory to the folder 
+where the Tax Parcel Geoenrich is located. Run the Git pull command.
+```bash
+git pull
+```
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
