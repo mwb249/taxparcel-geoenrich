@@ -72,7 +72,7 @@ conda create --clone arcgispro-py3 --prefix "<install_dir>\ArcGIS\Server\framewo
 ```
 **ArcGIS Pro**
 ```bash
-conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
+conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich"
 ```
 It will take a few minutes to create the new environment.
 
