@@ -55,26 +55,17 @@ Open the Windows Command Prompt as an Administrator.
 Change the working directory to the ArcGIS Python scripts folder. This will be slightly different depending on if you 
 are using Tax Parcel Geoenrich with ArcGIS Pro or ArcGIS Server.
 
-**ArcGIS Server**
-```bash
-cd <install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\Scripts
-```
-**ArcGIS Pro**
-```bash
-cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
-```
+*ArcGIS Server:* ```cd <install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\Scripts```
+
+*ArcGIS Pro:* ```cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts```
 
 Use conda to clone the default Python environment, giving it a new name. Again, the path will be different depending 
 on an ArcGIS Pro or ArcGIS Server installation.
 
-**ArcGIS Server**
-```bash
-conda create --clone arcgispro-py3 --prefix "<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
-```
-**ArcGIS Pro**
-```bash
-conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich"
-```
+*ArcGIS Server:* ```conda create --clone arcgispro-py3 --prefix "<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich"```
+
+*ArcGIS Pro:* ```conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich"```
+
 It will take a few minutes to create the new environment.
 
 Once the environment is created, activate it, then update the environment and install the PyYAML package.
