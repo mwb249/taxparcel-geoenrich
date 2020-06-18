@@ -135,7 +135,7 @@ exists in the geodatabase, it will be overwritten each time the script runs.
     ```
     C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich\python.exe
     ```
-6. In the Add arguments text box, type the name of the script (tpgeoenrich.py).
+6. In the Add arguments text box, type the name of the script: ```tpgeoenrich.py```.
 7. In the Start in text box, type the path to the folder where your script is located and click OK.
 8. Click the *Triggers* tab, click New, and set a schedule for your task.
 9. Click OK.
