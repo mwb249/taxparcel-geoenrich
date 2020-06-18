@@ -127,8 +127,14 @@ exists in the geodatabase, it will be overwritten each time the script runs.
 3. Click the *Actions* tab and click New.
 4. Set Action to Start a Program.
 5. Browse to the location of your Python 3 environment
-    - ArcGIS Server: ```<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich\python.exe```
-    - ArcGIS Pro: ```C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich\python.exe```
+    - ArcGIS Server:
+    ```
+    <install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich\python.exe
+    ```
+    - ArcGIS Pro:
+    ```
+    C:\Program Files\ArcGIS\Pro\bin\Python\envs\taxparcel-geoenrich\python.exe
+    ```
 6. In the Add arguments text box, type the name of the script (tpgeoenrich.py).
 7. In the Start in text box, type the path to the folder where your script is located and click OK.
 8. Click the *Triggers* tab, click New, and set a schedule for your task.
