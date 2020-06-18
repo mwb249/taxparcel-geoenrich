@@ -45,8 +45,8 @@ Unpacking objects: 100% (36/36), done.
 You can close the Git CLI.
 
 ### Create Python Environment
-In order to use the ArcPy site package and the ArcGIS API for Python, you will need to create a cloned environment 
-based on the ArcGIS Pro conda environment that comes installed with ArcGIS Pro or ArcGIS Enterprise. Click 
+In order to use the ArcPy site package and the ArcGIS API for Python, you will need to create a cloned Python 
+environment based on the ArcGIS Pro conda environment that comes installed with ArcGIS Pro or ArcGIS Enterprise. Click 
 [here](https://enterprise.arcgis.com/en/server/latest/publish-services/windows/deploying-custom-python-packages.htm) to 
 learn more about deploying custom Python packages using ArcGIS software.
 
@@ -77,7 +77,7 @@ conda create --clone arcgispro-py3 --prefix "C:\Program Files\ArcGIS\Pro\bin\Pyt
 ```
 It will take a few minutes to create the new environment.
 
-Once the environment is created, activate it to update and install the PyYAML package.
+Once the environment is created, activate it, then update the environment and install the PyYAML package.
 ```bash
 proswap taxparcel-geoenrich
 conda update --all
@@ -87,7 +87,7 @@ conda install -y pyyaml
 ### Secure Your *ArcGIS Enterprise Portal* Credentials
 Tax Parcel Geoenrich uses the ```profile``` parameter when connecting to a Web GIS. Creating a profile stores all the 
 authorization credentials (except the password) in the user's home directory in an unencrypted config file named 
-```.arcgisprofile```. The password is stored in an OS specific password manager through the keyring python module. More 
+```.arcgisprofile```. The password is stored in an OS specific password manager through the keyring Python module. More 
 information can be found 
 [here](https://developers.arcgis.com/python/guide/working-with-different-authentication-schemes/#Storing-your-credentials-locally).
 
@@ -112,7 +112,7 @@ The output should look something like this:
 ```
 GIS @ https://gis.indtwp.com/portal version:5.1
 ```
-Use the ```exit()``` command to exit the Python Prompt.
+Use the ```exit()``` command to close out of the Python Prompt.
 
 ### Input Your Configuration Settings
 Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-click on ```config.example.yml```. Create 
@@ -121,6 +121,8 @@ Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-cl
 Right-click on ```config.yml``` and click *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
 
 ### Setup Windows Task Scheduler
+Windows Task Scheduler will be used to set the script to run at a frequency of your choice. If the output feature class 
+exists in the geodatabase, it will be overwritten when the script runs.
 1. Open Windows *Task Scheduler*.
 2. Click Action > Create Task and name the task.
 3. Click the *Actions* tab and click New.
@@ -134,8 +136,8 @@ Right-click on ```config.yml``` and click *Open with...*, choose a text editor (
 9. Click OK.
 
 ### Updating Tax Parcel Geoenrich to the Latest Version
-To update Tax Parcel Geoenrich to the latest version, open the Git CLI and change the working directory to the folder 
-where the Tax Parcel Geoenrich is located. Run the Git pull command.
+To update Tax Parcel Geoenrich to the latest version, open the Git CLI, change the working directory to the folder 
+where the Tax Parcel Geoenrich is located, and run the Git pull command.
 ```bash
 git pull
 ```
