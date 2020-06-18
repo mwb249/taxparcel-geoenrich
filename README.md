@@ -65,6 +65,7 @@ cd C:\Program Files\ArcGIS\Pro\bin\Python\Scripts
 ```
 Use conda to clone the default Python environment, giving it a new name. Again, the path will be different depending 
 on an ArcGIS Pro or ArcGIS Server installation.
+
 ArcGIS Server:
 ```bash
 conda create --clone arcgispro-py3 --prefix "<install_dir>\ArcGIS\Server\framework\runtime\ArcGIS\bin\Python\envs\taxparcel-geoenrich"
