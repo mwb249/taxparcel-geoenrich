@@ -121,8 +121,8 @@ Browse to the directory where you downloaded *Tax Parcel Geoenrich* and right-cl
 Right-click on ```config.yml``` and click *Open with...*, choose a text editor (*Notepad* or *Notepad++* work fine).
 
 ### Setup Windows Task Scheduler
-Windows Task Scheduler will be used to set the script to run at a frequency of your choice. If the output feature class 
-exists in the geodatabase, it will be overwritten when the script runs.
+Windows Task Scheduler can be used to set the script to run at a frequency of your choice. If the output feature class 
+exists in the geodatabase, it will be overwritten each time the script runs.
 1. Open Windows *Task Scheduler*.
 2. Click Action > Create Task and name the task.
 3. Click the *Actions* tab and click New.
@@ -137,7 +137,8 @@ exists in the geodatabase, it will be overwritten when the script runs.
 
 ### Updating Tax Parcel Geoenrich to the Latest Version
 To update Tax Parcel Geoenrich to the latest version, open the Git CLI, change the working directory to the folder 
-where the Tax Parcel Geoenrich is located, and run the Git pull command.
+where the Tax Parcel Geoenrich is located, and run the Git pull command. This will update the script and other 
+associated files while leaving your config file in place.
 ```bash
 git pull
 ```
