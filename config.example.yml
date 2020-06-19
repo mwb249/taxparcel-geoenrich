@@ -1,7 +1,10 @@
 ---
 # WebGIS information
 webgis:
-  profile: profile_somegis
+  portal_url: https://gis.somemunicipality.com/portal
+  username: SomeUser
+  password: SomePassword
+  profile: Profile_SomeGIS
   serv_folder:
   serv_name:
   portal_item:
@@ -11,7 +14,7 @@ opendata_url: https://opendata.arcgis.com/datasets/xxxxxxxxxxxxxxxxxxxxxxxxxxxx.
 
 # GIS Environment settings
 gis_env:
-  workspace: C:\GIS\path\to\enterprise_geodatabase.sde
+  workspace: C:/GIS/path/to/enterprise_geodatabase.sde/some_dataset
   overwrite_output: True
   out_fc_name: TaxParcel_SomeMunicipality
   # Projection Examples (match Esri's description):

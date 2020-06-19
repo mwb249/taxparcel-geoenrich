@@ -225,6 +225,11 @@ def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
+    # Delete existing feature class
+    if arcpy.Exists(out_fc_name):
+        print('Removing existing {} feature class...'.format(out_fc_name))
+        arcpy.Delete_management(out_fc_name)
+
     # Output final_lyr to enterprise geodatabase feature class
     print('Copying features to geodatabase...')
     arcpy.CopyFeatures_management(final_lyr, out_fc_name)
