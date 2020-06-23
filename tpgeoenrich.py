@@ -191,16 +191,12 @@ def reorderfields(table, out_table, field_order, add_missing=True):
     return out_table
 
 
-def pushtogdb(final_lyr, profile, serv_folder, serv_name, workspace, out_fc_name):
+def pushtogdb(final_lyr, gis, serv_folder, serv_name, workspace, out_fc_name):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
     restarted afterwards.
     """
-
-    # Create connection to ArcGIS Portal
-    print('Establishing connection to ArcGIS Enterprise Portal...')
-    gis = GIS(profile=profile)
 
     # List federated GIS servers, set variable for first server in list
     print('Finding federated GIS servers...')
@@ -392,7 +388,7 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     arcpy.MakeFeatureLayer_management('parcel_fc_ordered', 'final_lyr')
 
     # Copy to geodatabase
-    pushtogdb('final_lyr', cfg_profile, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
+    pushtogdb('final_lyr', webgis, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
 
     # Delete temporary layers and temporary file geodatabase
     print('Deleting temporary layers...')
@@ -415,7 +411,6 @@ if __name__ == "__main__":
         cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # Set variables based on values from config file
-    cfg_profile = cfg['webgis']['profile']
     cfg_serv_folder = cfg['webgis']['serv_folder']
     cfg_serv_name = cfg['webgis']['serv_name']
     cfg_portal_item = cfg['webgis']['portal_item']
@@ -426,6 +421,13 @@ if __name__ == "__main__":
     cfg_out_fc_proj = cfg['gis_env']['out_fc_proj']
     cfg_cvt_codes = cfg['cvt_codes']
     cfg_csv_uri = cfg['csv_uri']
+
+    # Create connection to ArcGIS Portal
+    print('Establishing connection to ArcGIS Enterprise Portal...')
+    if cfg['webgis']['profile']:
+        webgis = GIS(profile=cfg['webgis']['profile'])
+    else:
+        webgis = GIS(cfg['webgis']['portal_url'], cfg['webgis']['username'], cfg['webgis']['password'])
 
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
