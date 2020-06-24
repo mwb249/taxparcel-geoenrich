@@ -65,7 +65,7 @@ final_field_order = ['pnum', 'PIN', 'relatedpnum', 'REVISIONDATE', 'CVTTAXCODE',
                      'LIVING_AREA_SQFT', 'dataexport']
 
 
-def formatpin(pnum, relatedpnum):
+def format_pin(pnum, relatedpnum):
     """Formats a Parcel ID Number (PIN) from a BS&A PNUM."""
     try:
         if relatedpnum is None or relatedpnum.startswith('70-15-17-6'):
@@ -80,7 +80,7 @@ def formatpin(pnum, relatedpnum):
     return p
 
 
-def formatbsaurl(pnum):
+def format_bsaurl(pnum):
     """Formats a BS&A Online URL Request based on the PNUM."""
     if pnum:
         pnum_split = pnum.split('-')
@@ -97,14 +97,14 @@ def formatbsaurl(pnum):
     return r.url
 
 
-def shpfilename(directory):
+def shpfile_name(directory):
     """Reads directory, finds first shapefile in directory, returns the file name and path as a list of values."""
     for file in os.listdir(directory):
         if file.endswith('.shp') or file.endswith('.SHP'):
             return file
 
 
-def getshpfile(directory, opendata_url):
+def get_shpfile(directory, opendata_url):
     """Requests and downloads zipped shapefile from specified open data website, unzips to temporary directory."""
     # Make request to get zipped tax parcel shapefile
     print('Downloading zipped shapefile...')
@@ -123,20 +123,29 @@ def getshpfile(directory, opendata_url):
         zip_file.extractall(directory)
 
     # Delete zip file
+    print('Deleting zipfile...')
     os.remove(zip_path)
-    return 'Zipfile deleted...'
+    return
 
 
-def cleanup(directory):
+def cleanup(directory, gdb_path):
     """Attempts to delete directory and all files within it."""
+    # Delete temporary layers and temporary file geodatabase
+    print('Deleting temporary layers...')
+    arcpy.Delete_management(r"'parcel_lyr';'bsa_export';'join_table';'final_lyr'")
+    arcpy.ClearWorkspaceCache_management()
+    arcpy.Delete_management(gdb_path)
+
     try:
         shutil.rmtree(directory)
+        print('All temporary files deleted...')
     except OSError as e:
         print("Error: %s : %s" % (directory, e.strerror))
-    return 'All temporary files deleted.'
+
+    return
 
 
-def updatesummary(gis, portal_item):
+def update_summary(gis, portal_item):
     """Updates the summary field on the specified Portal item Overview page."""
     flc_item = gis.content.get(portal_item)
     now = datetime.now()
@@ -147,7 +156,7 @@ def updatesummary(gis, portal_item):
     print('Portal item summary updated...')
 
 
-def reorderfields(table, out_table, field_order, add_missing=True):
+def reorder_fields(table, out_table, field_order, add_missing=True):
     """
     Reorders fields in input feature class / table
     :table:         input table (fc, table, layer, etc)
@@ -191,67 +200,110 @@ def reorderfields(table, out_table, field_order, add_missing=True):
     return out_table
 
 
-def pushtogdb(final_lyr, gis, serv_folder, serv_name, workspace, out_fc_name):
+def stop_service(gis, webgis_config):
+    """Stops the ArcGIS feature service specified in the configuration file."""
+
+    # List federated GIS servers, set variable for first server in list
+    print('Finding federated GIS servers...')
+    gis_server = gis.admin.servers.list()[0]
+    # List all services for specified folder
+    services = gis_server.services.list(webgis_config['serv_folder'])
+    # Stop feature service
+    f_serv = None
+    f_serv_status = False
+    for serv in services:
+        if serv.properties.serviceName == webgis_config['serv_name']:
+            print('Stopping feature service...')
+            f_serv = serv
+            f_serv_status = f_serv.stop()
+            print('Feature service stopped...')
+    return f_serv_status, f_serv
+
+
+def conn_portal(webgis_config):
+    """Creates connection to an ArcGIS Enterprise Portal."""
+    print('Establishing connection to ArcGIS Enterprise Portal...')
+    w_gis = None
+    try:
+        if cfg_webgis['profile']:
+            w_gis = GIS(profile=webgis_config['profile'])
+        else:
+            w_gis = GIS(webgis_config['portal_url'], webgis_config['username'], webgis_config['password'])
+    except Exception as e:
+        print('Error: {}'.format(e))
+        print('Exiting script: not able to connect to ArcGIS Enterprise Portal.')
+        exit()
+    return w_gis
+
+
+def test_schema_lock(gis_env_config, f_serv, f_serv_status):
+    """Checks if workspace can acquire a schema lock. Exits program if not able to acquire lock."""
+    # Change environment workspace
+    arcpy.env.workspace = gis_env_config['workspace']
+
+    # Clear environment workspace cache
+    arcpy.ClearWorkspaceCache_management()
+
+    if not arcpy.TestSchemaLock(gis_env_config['workspace']):
+        # Restart feature service
+        if f_serv_status:
+            print('Restarting feature service...')
+            f_serv.start()
+        print('Exiting script: Unable to acquire the necessary schema lock.')
+        exit()
+    else:
+        pass
+
+
+def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
     restarted afterwards.
     """
 
-    # List federated GIS servers, set variable for first server in list
-    print('Finding federated GIS servers...')
-    gis_server = gis.admin.servers.list()[0]
-
-    # List all services for specified folder
-    services = gis_server.services.list(serv_folder)
-
-    # Stop feature service
-    service = None
-    serv_stop = False
-    for serv in services:
-        if serv.properties.serviceName == serv_name:
-            print('Stopping feature service...')
-            service = serv
-            serv_stop = service.stop()
-            print('Feature service stopped...')
-
     # Change environment workspace
-    arcpy.env.workspace = workspace
+    arcpy.env.workspace = gis_env_config['workspace']
 
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
     # Delete existing feature class
-    if arcpy.Exists(out_fc_name):
-        print('Removing existing {} feature class...'.format(out_fc_name))
-        arcpy.Delete_management(out_fc_name)
+    if arcpy.Exists(gis_env_config['out_fc_name']):
+        print('Removing existing {} feature class...'.format(gis_env_config['out_fc_name']))
+        try:
+            arcpy.Delete_management(gis_env_config['out_fc_name'])
+        except Exception as e:
+            print('Error: Unable to delete existing feature class - {}'.format(e))
+            exit()
 
     # Output final_lyr to enterprise geodatabase feature class
     print('Copying features to geodatabase...')
-    arcpy.CopyFeatures_management(final_lyr, out_fc_name)
+    arcpy.CopyFeatures_management(final_lyr, gis_env_config['out_fc_name'])
 
     # Assign domains to fields
     print('Assigning domains to fields...')
     field_domain_lst = [['classcode', 'taxClassDESCR'], ['schooltaxcode', 'taxSchoolDESCR']]
     for domain in field_domain_lst:
-        arcpy.AssignDomainToField_management(out_fc_name, domain[0], domain[1])
+        arcpy.AssignDomainToField_management(gis_env_config['out_fc_name'], domain[0], domain[1])
 
     print('Altering ObjectID alias...')
-    arcpy.AlterField_management(out_fc_name, 'OBJECTID', new_field_alias='OBJECTID')
+    arcpy.AlterField_management(gis_env_config['out_fc_name'], 'OBJECTID', new_field_alias='OBJECTID')
 
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
     # Restart feature service
-    if serv_stop:
+    if f_serv_status:
         print('Starting feature service...')
-        service.start()
+        f_serv.start()
 
     # Update the Portal item summary
-    updatesummary(gis, cfg_portal_item)
+    print('Updating feature service summary...')
+    update_summary(gis, webgis_config['portal_item'])
 
 
-def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
+def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
     """Intakes a tax parcel shapefile, modifies fields, reprojects, then joins to BS&A table data. The final layer is
     copied to a geodatabase feature class."""
     # Set initial environment workspace
@@ -260,11 +312,11 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
 
     # Set environment settings
     arcpy.env.qualifiedFieldNames = False
-    arcpy.env.overwriteOutput = overwrite_output
+    arcpy.env.overwriteOutput = gis_env_config['overwrite_output']
 
     # Set variable to name of shapefile
     print('Finding shapefile...')
-    shp_name = shpfilename(directory)
+    shp_name = shpfile_name(directory)
 
     # Make a layer from the shapefile
     arcpy.MakeFeatureLayer_management(shp_name, 'parcel_all_lyr')
@@ -309,7 +361,7 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     # Modify projection if necessary
     print('Assessing coordinate system...')
     in_spatial_ref = arcpy.Describe('parcel_fc').spatialReference
-    out_spatial_ref = arcpy.SpatialReference(out_fc_proj)
+    out_spatial_ref = arcpy.SpatialReference(gis_env_config['out_fc_proj'])
     if in_spatial_ref.name == 'Unknown':
         change_proj = False
         print('Could not change projection due to undefined input coordinate system')
@@ -366,8 +418,8 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     arcpy.Append_management('bsa_export', 'join_table', schema_type='NO_TEST', field_mapping=field_mappings)
 
     # Create expressions for field calculations
-    pin_exp = 'formatpin(!PNUM!, !RELATEDPNUM!)'
-    bsa_url_exp = 'formatbsaurl(!PNUM!)'
+    pin_exp = 'format_pin(!PNUM!, !RELATEDPNUM!)'
+    bsa_url_exp = 'format_bsaurl(!PNUM!)'
     data_export_exp = 'datetime.now()'
 
     # Calculate fields
@@ -383,23 +435,12 @@ def geoenrich(directory, overwrite_output, cvt_codes, out_fc_proj, csv_uri):
     # Reorder fields
     print('Reordering fields...')
     arcpy.CopyFeatures_management('parcel_lyr', 'parcel_fc_join')
-    reorderfields('parcel_fc_join', 'parcel_fc_ordered', final_field_order)
+    reorder_fields('parcel_fc_join', 'parcel_fc_ordered', final_field_order)
     arcpy.DeleteField_management('parcel_fc_ordered', dropFields_fc_final)
-    arcpy.MakeFeatureLayer_management('parcel_fc_ordered', 'final_lyr')
+    final_lyr = 'final_lyr'
+    arcpy.MakeFeatureLayer_management('parcel_fc_ordered', final_lyr)
 
-    # Copy to geodatabase
-    pushtogdb('final_lyr', webgis, cfg_serv_folder, cfg_serv_name, cfg_workspace, cfg_out_fc_name)
-
-    # Delete temporary layers and temporary file geodatabase
-    print('Deleting temporary layers...')
-
-    arcpy.Delete_management(r"'parcel_lyr';'bsa_export';'join_table';'final_lyr'")
-    arcpy.Delete_management(gdb_path)
-
-    # Clear environment workspace cache
-    arcpy.ClearWorkspaceCache_management()
-
-    return 'Successfully published feature class!'
+    return gdb_path, final_lyr
 
 
 if __name__ == "__main__":
@@ -411,32 +452,34 @@ if __name__ == "__main__":
         cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # Set variables based on values from config file
-    cfg_serv_folder = cfg['webgis']['serv_folder']
-    cfg_serv_name = cfg['webgis']['serv_name']
-    cfg_portal_item = cfg['webgis']['portal_item']
+    cfg_webgis = cfg['webgis']
     cfg_opendata_url = cfg['opendata_url']
-    cfg_workspace = cfg['gis_env']['workspace']
-    cfg_overwrite_output = cfg['gis_env']['overwrite_output']
-    cfg_out_fc_name = cfg['gis_env']['out_fc_name']
-    cfg_out_fc_proj = cfg['gis_env']['out_fc_proj']
+    cfg_gis_env = cfg['gis_env']
     cfg_cvt_codes = cfg['cvt_codes']
     cfg_csv_uri = cfg['csv_uri']
 
-    # Create connection to ArcGIS Portal
-    print('Establishing connection to ArcGIS Enterprise Portal...')
-    if cfg['webgis']['profile']:
-        webgis = GIS(profile=cfg['webgis']['profile'])
-    else:
-        webgis = GIS(cfg['webgis']['portal_url'], cfg['webgis']['username'], cfg['webgis']['password'])
+    # Create connection to ArcGIS Enterprise Portal
+    webgis_conn = conn_portal(cfg_webgis)
+
+    # Stop ArcGIS feature service
+    serv_stop, service = stop_service(webgis_conn, cfg_webgis)
+
+    # Test for schema lock
+    # test_schema_lock(cfg_gis_env, service, serv_stop)
 
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
 
-    # Make request to get zipped tax parcel shapefile
-    print(getshpfile(temp_dir, cfg_opendata_url))
+    # Make request to get zipped shapefile
+    get_shpfile(temp_dir, cfg_opendata_url)
 
-    # GeoEnrich requested tax parcel data, publish as a new feature class in a geodatabase
-    print(geoenrich(temp_dir, cfg_overwrite_output, cfg_cvt_codes, cfg_out_fc_proj, cfg_csv_uri))
+    # Geoenrich requested tax parcel data
+    geodatabase_path, final_lyr_name = geoenrich(temp_dir, cfg_gis_env, cfg_cvt_codes, cfg_csv_uri)
+
+    # Copy to geodatabase
+    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop)
 
     # Cleanup temporary files
-    print(cleanup(temp_dir))
+    cleanup(temp_dir, geodatabase_path)
+
+    print('Script completed successfully!')
