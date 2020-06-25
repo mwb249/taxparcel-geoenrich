@@ -236,26 +236,7 @@ def conn_portal(webgis_config):
     return w_gis
 
 
-def test_schema_lock(gis_env_config, f_serv, f_serv_status):
-    """Checks if workspace can acquire a schema lock. Exits program if not able to acquire lock."""
-    # Change environment workspace
-    arcpy.env.workspace = gis_env_config['workspace']
-
-    # Clear environment workspace cache
-    arcpy.ClearWorkspaceCache_management()
-
-    if not arcpy.TestSchemaLock(gis_env_config['workspace']):
-        # Restart feature service
-        if f_serv_status:
-            print('Restarting feature service...')
-            f_serv.start()
-        print('Exiting script: Unable to acquire the necessary schema lock.')
-        exit()
-    else:
-        pass
-
-
-def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status):
+def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status, directory, gdb_path):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
@@ -270,11 +251,15 @@ def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_st
 
     # Delete existing feature class
     if arcpy.Exists(gis_env_config['out_fc_name']):
-        print('Removing existing {} feature class...'.format(gis_env_config['out_fc_name']))
-        try:
+        fc_path = os.path.join(gis_env_config['workspace'], gis_env_config['out_fc_name'])
+        if arcpy.TestSchemaLock(fc_path):
+            print('Removing existing {} feature class...'.format(gis_env_config['out_fc_name']))
             arcpy.Delete_management(gis_env_config['out_fc_name'])
-        except Exception as e:
-            print('Error: Unable to delete existing feature class - {}'.format(e))
+        else:
+            print('Unable to obtain exclusive schema lock '
+                  'on the existing {} feature class...'.format(gis_env_config['out_fc_name']))
+            cleanup(directory, gdb_path)
+            print('Exiting script: Did not update {}.'.format(gis_env_config['out_fc_name']))
             exit()
 
     # Output final_lyr to enterprise geodatabase feature class
@@ -464,9 +449,6 @@ if __name__ == "__main__":
     # Stop ArcGIS feature service
     serv_stop, service = stop_service(webgis_conn, cfg_webgis)
 
-    # Test for schema lock
-    # test_schema_lock(cfg_gis_env, service, serv_stop)
-
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
 
@@ -477,7 +459,7 @@ if __name__ == "__main__":
     geodatabase_path, final_lyr_name = geoenrich(temp_dir, cfg_gis_env, cfg_cvt_codes, cfg_csv_uri)
 
     # Copy to geodatabase
-    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop)
+    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop, temp_dir, geodatabase_path)
 
     # Cleanup temporary files
     cleanup(temp_dir, geodatabase_path)
