@@ -11,6 +11,7 @@ from zipfile import ZipFile
 import arcpy
 import requests
 import yaml
+import re
 from datetime import datetime
 from arcgis.gis import GIS
 
@@ -49,6 +50,9 @@ field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
                  ['ownerzip', 'TEXT', 'Owner Zip', 10, 'ownerzip'],
                  ['ownercountry', 'TEXT', 'Owner Country', 90, 'ownercountry'],
                  ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode'],
+                 ['legaldesc', 'TEXT', 'Legal Description', 3000, 'legalDescription'],
+                 ['acresrecorded', 'DOUBLE', 'Acres Recorded', None, None],
+                 ['acres', 'DOUBLE', 'Acres', None, None],
                  ['bsaurl', 'TEXT', 'BS&A URL', 350, None],
                  ['dataexport', 'DATE', 'Data Export', None, None]]
 
@@ -95,6 +99,14 @@ def format_bsaurl(pnum):
               'uid': cvt_id_dict[cvt_code]}
     r = requests.Request('GET', url_endpoint, params=params).prepare()
     return r.url
+
+
+def find_acres_recorded(legal_desc):
+    match = re.search(r'.\s*(\d*\.?\d+)\s*A.*$', legal_desc)
+    a_record = match.group(1) if match else None
+    if a_record:
+        a_record = float(a_record)
+    return a_record
 
 
 def shpfile_name(directory):
@@ -347,6 +359,8 @@ def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
     print('Assessing coordinate system...')
     in_spatial_ref = arcpy.Describe('parcel_fc').spatialReference
     out_spatial_ref = arcpy.SpatialReference(gis_env_config['out_fc_proj'])
+    print(f'Current Spatial Reference: {in_spatial_ref.name}')
+    print(f'Output Spatial Reference: {out_spatial_ref.name}')
     if in_spatial_ref.name == 'Unknown':
         change_proj = False
         print('Could not change projection due to undefined input coordinate system')
@@ -406,20 +420,26 @@ def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
     pin_exp = 'format_pin(!PNUM!, !RELATEDPNUM!)'
     bsa_url_exp = 'format_bsaurl(!PNUM!)'
     data_export_exp = 'datetime.now()'
+    acres_recorded_exp = 'find_acres_recorded(!LEGALDESC!)'
 
     # Calculate fields
     print('Calculating fields...')
     arcpy.CalculateField_management('join_table', 'PIN', pin_exp, 'PYTHON3')
     arcpy.CalculateField_management('join_table', 'BSAURL', bsa_url_exp, 'PYTHON3')
     arcpy.CalculateField_management('join_table', 'DATAEXPORT', data_export_exp, 'PYTHON3')
+    arcpy.CalculateField_management('join_table', 'ACRESRECORDED', acres_recorded_exp, 'PYTHON3')
 
     # Join parcel_lyr to bsa_export table
     print('Joining table to parcel layer...')
     arcpy.AddJoin_management('parcel_lyr', 'PIN', 'join_table', 'PIN')
+    arcpy.CopyFeatures_management('parcel_lyr', 'parcel_fc_join')
+
+    # Calculate Acres field
+    print('Calculating acres...')
+    arcpy.CalculateGeometryAttributes_management('parcel_fc_join', [['acres', 'AREA']], area_unit='ACRES')
 
     # Reorder fields
     print('Reordering fields...')
-    arcpy.CopyFeatures_management('parcel_lyr', 'parcel_fc_join')
     reorder_fields('parcel_fc_join', 'parcel_fc_ordered', final_field_order)
     arcpy.DeleteField_management('parcel_fc_ordered', dropFields_fc_final)
     final_lyr = 'final_lyr'
