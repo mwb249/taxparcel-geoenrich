@@ -52,7 +52,7 @@ field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
                  ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode'],
                  ['legaldesc', 'TEXT', 'Legal Description', 3000, 'legalDescription'],
                  ['acresrecorded', 'DOUBLE', 'Acres Recorded', None, None],
-                 ['acres', 'DOUBLE', 'Acres', None, None],
+                 ['acres', 'DOUBLE', 'Acres (Calculated)', None, None],
                  ['bsaurl', 'TEXT', 'BS&A URL', 350, None],
                  ['dataexport', 'DATE', 'Data Export', None, None]]
 
