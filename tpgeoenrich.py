@@ -102,7 +102,7 @@ def format_bsaurl(pnum):
 
 
 def find_acres_recorded(legal_desc):
-    matches = re.findall(r'.\s*(\d+\.?\d*)\s*A', legal_desc)
+    matches = re.findall(r'(?<! BLDG)(?<! NO)(?<! SEC) (\d+\.?\d*)(?! APT )(?=\s*A)', legal_desc)
     a_record = float(matches[-1]) if matches else None
     return a_record
 
