@@ -102,7 +102,7 @@ def format_bsaurl(pnum):
 
 
 def find_acres_recorded(legal_desc):
-    reg_exp = r'(?<! BLDG)(?<! NO)(?<! NO.)(?<! SEC)(?<! EXC [NEWS])' \
+    reg_exp = r'(?<! BLDG)(?<! NO)(?<! NO\.)(?<! SEC)(?<! EXC [NEWS])' \
                  r' (\d*\.?\d+)' \
                  r'(?! APT )(?! ALL )(?! ALSO )(?! AND )(?! AS )' \
                  r'(?=\s*A)'
