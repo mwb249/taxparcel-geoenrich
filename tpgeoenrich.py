@@ -7,7 +7,6 @@ published to the geodatabase specified in the config.yml file.
 import os
 import shutil
 import tempfile
-from zipfile import ZipFile
 import arcpy
 import requests
 import yaml
@@ -17,17 +16,7 @@ from arcgis.gis import GIS
 
 # Tax parcel fields
 # List order: Shapefile Field Name, New Field Name, New Field Alias
-field_lst_fc = [['REVISIONDA', 'REVISIONDATE', 'Revision Date'],
-                ['CVTTAXCODE', 'CVTTAXCODE', 'CVT Tax Code'],
-                ['CVTTAXDESC', 'CVTTAXDESCRIPTION', 'CVT Name'],
-                ['SITEADDRES', 'SITEADDRESS_OC', 'Site Address (OC)'],
-                ['SITESTATE', 'SITESTATE', 'Site State'],
-                ['ASSESSEDVA', 'ASSESSEDVALUE', 'Assessed Value'],
-                ['TAXABLEVAL', 'TAXABLEVALUE', 'Taxable Value'],
-                ['NUM_BEDS', 'NUM_BEDS', 'Number of Bedrooms'],
-                ['NUM_BATHS', 'NUM_BATHS', 'Number of Bathrooms'],
-                ['STRUCTURE_', 'STRUCTURE_DESC', 'Structure Type'],
-                ['LIVING_ARE', 'LIVING_AREA_SQFT', 'Living Area']]
+field_lst_fc = [['SITEADDRESS', 'SITEADDRESS_OC', 'Site Address (OC)']]
 
 # BS&A table conversion
 # List order: Field Name, Field Type, Field Alias, Field Length, BS&A Field Name
@@ -57,7 +46,7 @@ field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
                  ['dataexport', 'DATE', 'Data Export', None, None]]
 
 # Tax parcel drop fields
-dropFields_fc = ['OBJECTID', 'OBJECTID_1', 'SITECITY', 'SITEZIP5', 'Shapearea', 'Shapelen']
+dropFields_fc = ['SITECITY', 'SITEZIP5']
 dropFields_fc_final = ['OBJECTID', 'PIN_1']
 
 # Final field order
@@ -111,43 +100,16 @@ def find_acres_recorded(legal_desc):
     return a_record
 
 
-def shpfile_name(directory):
-    """Reads directory, finds first shapefile in directory, returns the file name and path as a list of values."""
-    for file in os.listdir(directory):
-        if file.endswith('.shp') or file.endswith('.SHP'):
-            return file
-
-
-def get_shpfile(directory, opendata_url):
-    """Requests and downloads zipped shapefile from specified open data website, unzips to temporary directory."""
-    # Make request to get zipped tax parcel shapefile
-    print('Downloading zipped shapefile...')
-    resp = requests.get(opendata_url, allow_redirects=True, timeout=10.0)
-
-    # Save zipfile to temporary directory
-    zip_name = 'taxparcels.zip'
-    zip_path = os.path.join(directory, zip_name)
-    zip_file = open(zip_path, 'wb')
-    zip_file.write(resp.content)
-    zip_file.close()
-
-    # Open the zipfile in READ mode and extract all files to temporary directory
-    print('Unzipping...')
-    with ZipFile(zip_path, 'r') as zip_file:
-        zip_file.extractall(directory)
-
-    # Delete zip file
-    print('Deleting zipfile...')
-    os.remove(zip_path)
-    return
-
-
 def cleanup(directory, gdb_path):
     """Attempts to delete directory and all files within it."""
     # Delete temporary layers and temporary file geodatabase
     print('Deleting temporary layers...')
-    arcpy.Delete_management(r"'parcel_lyr';'bsa_export';'join_table';'final_lyr'")
+    arcpy.Delete_management(['parcel_lyr', 'final_lyr', 'lyr_final_parcel'])
+    print('Deleting temporary feature classes and tables...')
+    arcpy.Delete_management(['fc_orig_parcel', 'fc_proj_parcel', 'bsa_export', 'join_table', 'fc_join_parcel',
+                             'fc_ordered_parcel'])
     arcpy.ClearWorkspaceCache_management()
+    print('Deleting temporary geodatabase...')
     arcpy.Delete_management(gdb_path)
 
     try:
@@ -157,6 +119,29 @@ def cleanup(directory, gdb_path):
         print("Error: %s : %s" % (directory, e.strerror))
 
     return
+
+
+def get_featureset(data_source):
+    """..."""
+    # Connect to ArcGIS Online and create a tax parcel FeatureLayer object
+    print('Connecting to ArcGIS Online and getting feature layer...')
+    gis = GIS()
+    fl_taxparcel = gis.content.get(data_source['item_id']).layers[data_source['lyr_num']]
+
+    # Format SQL expression based on CVTs requested in config file
+    cvt_list_len = len(data_source['cvt_codes'])
+    if cvt_list_len > 1:
+        cvt_list_tup = tuple(data_source['cvt_codes'])
+        sql = "CVTTAXCODE IN {}".format(cvt_list_tup)
+    elif cvt_list_len == 1:
+        sql = "CVTTAXCODE = '{}'".format(data_source['cvt_codes'][0])
+    else:
+        sql = 'CVTTAXCODE = ALL'
+
+    # Query FeatureLayer, return a FeatureSet containing the CVT's tax parcels
+    print('Querying feature layer, returning feature set...')
+    fset_taxparcel = fl_taxparcel.query(where=sql)
+    return fset_taxparcel
 
 
 def update_summary(gis, portal_item):
@@ -302,64 +287,37 @@ def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_st
     update_summary(gis, webgis_config['portal_item'])
 
 
-def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
+def geoenrich(directory, featureset, gis_env_config, csv_uri):
     """Intakes a tax parcel shapefile, modifies fields, reprojects, then joins to BS&A table data. The final layer is
     copied to a geodatabase feature class."""
-    # Set initial environment workspace
-    print('Setting environment workspace and settings...')
-    arcpy.env.workspace = directory
-
-    # Set environment settings
-    arcpy.env.qualifiedFieldNames = False
-    arcpy.env.overwriteOutput = gis_env_config['overwrite_output']
-
-    # Set variable to name of shapefile
-    print('Finding shapefile...')
-    shp_name = shpfile_name(directory)
-
-    # Make a layer from the shapefile
-    arcpy.MakeFeatureLayer_management(shp_name, 'parcel_all_lyr')
-
-    # Format SQL expression based on CVTs requested in config file
-    print('Correcting field names and aliases...')
-    cvt_list_len = len(cvt_codes)
-    if cvt_list_len > 1:
-        cvt_list_tup = tuple(cvt_codes)
-        sql = "CVTTAXCODE IN {}".format(cvt_list_tup)
-    elif cvt_list_len == 1:
-        sql = "CVTTAXCODE = '{}'".format(cvt_codes[0])
-    else:
-        sql = 'CVTTAXCODE = ALL'
-
-    # Select tax parcels from requested CVTs in parcel_all_lyr, make new layer from selection
-    arcpy.SelectLayerByAttribute_management("parcel_all_lyr", "NEW_SELECTION", sql)
-    arcpy.MakeFeatureLayer_management('parcel_all_lyr', 'parcel_sel_lyr')
 
     # Create temporary geodatabase and set path variables
+    print('Creating temporary geodatabase...')
     gdb_name = 'temp.gdb'
     arcpy.CreateFileGDB_management(directory, gdb_name)
     gdb_path = os.path.join(directory, gdb_name)
-    fc_path = os.path.join(gdb_path, 'parcel_fc')
 
-    # Copy features to temporary geodatabase
-    arcpy.CopyFeatures_management('parcel_sel_lyr', fc_path)
-
-    # Delete shapefile
-    arcpy.Delete_management(shp_name)
-
-    # Change environment workspace
+    # GIS environment settings
     arcpy.env.workspace = gdb_path
+    arcpy.env.qualifiedFieldNames = False
+    arcpy.env.overwriteOutput = gis_env_config['overwrite_output']
+
+    # FeatureSet to FeatureClass (ArcGIS API for Python)
+    print('Saving feature set to geodatabase feature class...')
+    featureset.save(gdb_path, 'fc_orig_parcel')
 
     # Correct field names (feature class)
+    print('Correcting field names...')
     for field_prop in field_lst_fc:
-        arcpy.AlterField_management('parcel_fc', field_prop[0], field_prop[1], field_prop[2])
+        arcpy.AlterField_management('fc_orig_parcel', field_prop[0], field_prop[1], field_prop[2])
 
     # Delete unnecessary fields (feature class)
-    arcpy.DeleteField_management('parcel_fc', dropFields_fc)
+    print('Deleting unnecessary fields...')
+    arcpy.DeleteField_management('fc_orig_parcel', dropFields_fc)
 
     # Modify projection if necessary
     print('Assessing coordinate system...')
-    in_spatial_ref = arcpy.Describe('parcel_fc').spatialReference
+    in_spatial_ref = arcpy.Describe('fc_orig_parcel').spatialReference
     out_spatial_ref = arcpy.SpatialReference(gis_env_config['out_fc_proj'])
     print(f'Current Spatial Reference: {in_spatial_ref.name}')
     print(f'Output Spatial Reference: {out_spatial_ref.name}')
@@ -377,11 +335,11 @@ def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
     print('Copying features to geodatabase feature class...')
     if change_proj:
         print('Changing projection, making feature layer...')
-        arcpy.Project_management('parcel_fc', 'parcel_fc_proj', out_spatial_ref)
-        arcpy.MakeFeatureLayer_management('parcel_fc_proj', 'parcel_lyr')
+        arcpy.Project_management('fc_orig_parcel', 'fc_proj_parcel', out_spatial_ref)
+        arcpy.MakeFeatureLayer_management('fc_proj_parcel', 'parcel_lyr')
     else:
         print('Making feature layer...')
-        arcpy.MakeFeatureLayer_management('parcel_fc', 'parcel_lyr')
+        arcpy.MakeFeatureLayer_management('fc_orig_parcel', 'parcel_lyr')
 
     # Convert CSV to GDB table
     print('Finding table...')
@@ -434,20 +392,21 @@ def geoenrich(directory, gis_env_config, cvt_codes, csv_uri):
     # Join parcel_lyr to bsa_export table
     print('Joining table to parcel layer...')
     arcpy.AddJoin_management('parcel_lyr', 'PIN', 'join_table', 'PIN')
-    arcpy.CopyFeatures_management('parcel_lyr', 'parcel_fc_join')
+    arcpy.CopyFeatures_management('parcel_lyr', 'fc_join_parcel')
 
     # Calculate Acres field
-    print('Calculating acres...')
-    arcpy.CalculateGeometryAttributes_management('parcel_fc_join', [['acres', 'AREA']], area_unit='ACRES')
+    if gis_env_config['out_fc_proj'] == 'NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)':
+        print('Calculating acres...')
+        arcpy.CalculateGeometryAttributes_management('fc_join_parcel', [['acres', 'AREA']], area_unit='ACRES')
 
     # Reorder fields
     print('Reordering fields...')
-    reorder_fields('parcel_fc_join', 'parcel_fc_ordered', final_field_order)
-    arcpy.DeleteField_management('parcel_fc_ordered', dropFields_fc_final)
-    final_lyr = 'final_lyr'
-    arcpy.MakeFeatureLayer_management('parcel_fc_ordered', final_lyr)
+    reorder_fields('fc_join_parcel', 'fc_ordered_parcel', final_field_order)
+    arcpy.DeleteField_management('fc_ordered_parcel', dropFields_fc_final)
+    lyr_final_parcel = 'lyr_final_parcel'
+    arcpy.MakeFeatureLayer_management('fc_ordered_parcel', lyr_final_parcel)
 
-    return gdb_path, final_lyr
+    return gdb_path, lyr_final_parcel
 
 
 if __name__ == "__main__":
@@ -459,10 +418,9 @@ if __name__ == "__main__":
         cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # Set variables based on values from config file
+    cfg_data_source = cfg['data_source']
     cfg_webgis = cfg['webgis']
-    cfg_opendata_url = cfg['opendata_url']
     cfg_gis_env = cfg['gis_env']
-    cfg_cvt_codes = cfg['cvt_codes']
     cfg_csv_uri = cfg['csv_uri']
 
     # Create connection to ArcGIS Enterprise Portal
@@ -471,14 +429,13 @@ if __name__ == "__main__":
     # Stop ArcGIS feature service
     serv_stop, service = stop_service(webgis_conn, cfg_webgis)
 
+    fset = get_featureset(cfg_data_source)
+
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
 
-    # Make request to get zipped shapefile
-    get_shpfile(temp_dir, cfg_opendata_url)
-
     # Geoenrich requested tax parcel data
-    geodatabase_path, final_lyr_name = geoenrich(temp_dir, cfg_gis_env, cfg_cvt_codes, cfg_csv_uri)
+    geodatabase_path, final_lyr_name = geoenrich(temp_dir, fset, cfg_gis_env, cfg_csv_uri)
 
     # Copy to geodatabase
     push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop, temp_dir, geodatabase_path)
