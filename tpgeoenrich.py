@@ -235,34 +235,15 @@ def conn_portal(webgis_config):
     return w_gis
 
 
-def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status, directory, gdb_path):
+def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
     restarted afterwards.
     """
 
-    # Change environment workspace
-    arcpy.env.workspace = gis_env_config['workspace']
-
-    # Clear environment workspace cache
-    arcpy.ClearWorkspaceCache_management()
-
-    # Delete existing feature class
-    if arcpy.Exists(gis_env_config['out_fc_name']):
-        fc_path = os.path.join(gis_env_config['workspace'], gis_env_config['out_fc_name'])
-        if arcpy.TestSchemaLock(fc_path):
-            print('Removing existing {} feature class...'.format(gis_env_config['out_fc_name']))
-            arcpy.Delete_management(gis_env_config['out_fc_name'])
-        else:
-            print('Unable to obtain exclusive schema lock '
-                  'on the existing {} feature class...'.format(gis_env_config['out_fc_name']))
-            cleanup(directory, gdb_path)
-            print('Exiting script: Did not update {}.'.format(gis_env_config['out_fc_name']))
-            exit()
-
-    # Output final_lyr to enterprise geodatabase feature class
-    print('Copying features to geodatabase...')
+    # Output final_lyr to target geodatabase feature class
+    print('Copying features to target geodatabase...')
     arcpy.CopyFeatures_management(final_lyr, gis_env_config['out_fc_name'])
 
     # Assign domains to fields
@@ -303,7 +284,7 @@ def geoenrich(directory, featureset, gis_env_config, csv_uri):
     arcpy.env.overwriteOutput = gis_env_config['overwrite_output']
 
     # FeatureSet to FeatureClass (ArcGIS API for Python)
-    print('Saving feature set to geodatabase feature class...')
+    print('Saving feature set to temporary geodatabase feature class...')
     featureset.save(gdb_path, 'fc_orig_parcel')
 
     # Correct field names (feature class)
@@ -332,7 +313,7 @@ def geoenrich(directory, featureset, gis_env_config, csv_uri):
         print('Modifying output coordinate system...')
 
     # Output final_lyr to enterprise geodatabase feature class
-    print('Copying features to geodatabase feature class...')
+    print('Copying features to temporary geodatabase feature class...')
     if change_proj:
         print('Changing projection, making feature layer...')
         arcpy.Project_management('fc_orig_parcel', 'fc_proj_parcel', out_spatial_ref)
@@ -429,6 +410,28 @@ if __name__ == "__main__":
     # Stop ArcGIS feature service
     serv_stop, service = stop_service(webgis_conn, cfg_webgis)
 
+    # Set GIS environment workspace
+    arcpy.env.workspace = cfg_gis_env['workspace']
+
+    # Inspect target geodatabase for existing feature class & schema locks
+    fc_exists = arcpy.Exists(cfg_gis_env['out_fc_name'])
+    fc_unlocked = arcpy.TestSchemaLock(cfg_gis_env['out_fc_name'])
+    print('Inspecting target geodatabase for existing feature class & schema locks...')
+    if fc_exists:
+        if fc_unlocked:
+            print('Feature class exists and does not have a schema lock...')
+            pass
+        else:
+            print('Target feature class is locked...')
+            # Restart feature service
+            if serv_stop:
+                print('Starting feature service...')
+                service.start()
+            print('Exiting script: Did not update the {} feature class.'.format(cfg_gis_env['out_fc_name']))
+            exit()
+    else:
+        print('Feature class does not exist in target geodatabase...')
+
     fset = get_featureset(cfg_data_source)
 
     # Create temporary directory
@@ -437,8 +440,19 @@ if __name__ == "__main__":
     # Geoenrich requested tax parcel data
     geodatabase_path, final_lyr_name = geoenrich(temp_dir, fset, cfg_gis_env, cfg_csv_uri)
 
+    # Change environment workspace
+    arcpy.env.workspace = cfg_gis_env['workspace']
+
+    # Clear environment workspace cache
+    arcpy.ClearWorkspaceCache_management()
+
+    # Delete existing target feature class
+    if fc_exists:
+        print('Deleting existing target feature class...')
+        arcpy.Delete_management(cfg_gis_env['out_fc_name'])
+
     # Copy to geodatabase
-    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop, temp_dir, geodatabase_path)
+    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop)
 
     # Cleanup temporary files
     cleanup(temp_dir, geodatabase_path)
