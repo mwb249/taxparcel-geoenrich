@@ -4,15 +4,19 @@ config.yml file. The shapefile is joined to a csv file that has been exported fr
 published to the geodatabase specified in the config.yml file.
 """
 
+import sys
 import os
-import shutil
-import tempfile
-import arcpy
 import requests
 import yaml
 import re
+import pandas as pd
 from datetime import datetime
 from arcgis.gis import GIS
+
+# Suppress all warnings
+if not sys.warnoptions:
+    import warnings
+    warnings.simplefilter("ignore")
 
 # Tax parcel fields
 # List order: Shapefile Field Name, New Field Name, New Field Alias
@@ -20,31 +24,25 @@ field_lst_fc = [['SITEADDRESS', 'SITEADDRESS_OC', 'Site Address (OC)']]
 
 # BS&A table conversion
 # List order: Field Name, Field Type, Field Alias, Field Length, BS&A Field Name
-field_lst_tbl = [['PIN', 'TEXT', 'PIN', 10, None],
-                 ['pnum', 'TEXT', 'Parcel Number', 20, 'pnum'],
-                 ['neighborhoodcode', 'TEXT', 'Neighborhood Code', 5, 'ecftbl'],
-                 ['classcode', 'LONG', 'Class Code', 3, 'propclass'],
-                 ['schooltaxcode', 'LONG', 'School Tax Code', 5, 'schooldist'],
-                 ['relatedpnum', 'TEXT', 'Related Parcel Number', 20, 'relatedpnum'],
-                 ['propstreetcombined', 'TEXT', 'Site Address (RH)', 350, 'propstreetcombined'],
-                 ['propaddrnum', 'DOUBLE', 'Site Address Number', None, 'propaddrnum'],
-                 ['propstreetname', 'TEXT', 'Site Street Name', 350, 'propstreetname'],
-                 ['propcity_RH', 'TEXT', 'Site City', 15, 'propcity'],
-                 ['propzip', 'TEXT', 'Site Zip Code', 10, 'propzip'],
-                 ['ownername1', 'TEXT', 'Owner Name 1', 180, 'ownername1'],
-                 ['ownername2', 'TEXT', 'Owner Name 2', 180, 'ownername2'],
-                 ['ownerstreetaddr', 'TEXT', 'Owner Street Address', 350, 'ownerstreetaddr'],
-                 ['ownercity', 'TEXT', 'Owner City', 70, 'ownercity'],
-                 ['ownerstate', 'TEXT', 'Owner State', 2, 'ownerstate'],
-                 ['ownerzip', 'TEXT', 'Owner Zip', 10, 'ownerzip'],
-                 ['ownercountry', 'TEXT', 'Owner Country', 90, 'ownercountry'],
-                 ['exemptcode', 'TEXT', 'Taxable Status', 50, 'exemptcode'],
-                 ['legaldesc', 'TEXT', 'Legal Description', 3000, 'legalDescription'],
-                 ['acresrecorded', 'DOUBLE', 'Acres Recorded', None, None],
-                 ['acres', 'DOUBLE', 'Acres (Calculated)', None, None],
-                 ['bsaurl', 'TEXT', 'BS&A URL', 350, None],
-                 ['dataexport', 'DATE', 'Data Export', None, None]]
-
+field_lst_tbl = [['pnum', 'Parcels.pnum'],
+                 ['neighborhoodcode', 'Parcels.ecftbl'],
+                 ['classcode', 'Parcels.propclass'],
+                 ['schooltaxcode', 'Parcels.schooldist'],
+                 ['relatedpnum', 'ParcelMaster.relatedpnum'],
+                 ['propstreetcombined', 'ParcelMaster.propstreetcombined'],
+                 ['propaddrnum', 'ParcelMaster.propaddrnum'],
+                 ['propstreetname', 'ParcelMaster.propstreetname'],
+                 ['propcity_RH', 'ParcelMaster.propcity'],
+                 ['propzip', 'TEXT', 'ParcelMaster.propzip'],
+                 ['ownername1', 'ParcelMaster.ownername1'],
+                 ['ownername2', 'ParcelMaster.ownername2'],
+                 ['ownerstreetaddr', 'ParcelMaster.ownerstreetaddr'],
+                 ['ownercity', 'ParcelMaster.ownercity'],
+                 ['ownerstate', 'ParcelMaster.ownerstate'],
+                 ['ownerzip', 'ParcelMaster.ownerzip'],
+                 ['ownercountry', 'ParcelMaster.ownercountry'],
+                 ['exemptcode', 'Parcels.exemptcode'],
+                 ['legaldesc', 'ParcelReadonly.legalDescription']]
 # Tax parcel drop fields
 dropFields_fc = ['SITECITY', 'SITEZIP5']
 dropFields_fc_final = ['OBJECTID', 'PIN_1']
@@ -60,8 +58,9 @@ final_field_order = ['pnum', 'PIN', 'relatedpnum', 'REVISIONDATE', 'CVTTAXCODE',
 
 def format_pin(pnum, relatedpnum):
     """Formats a Parcel ID Number (PIN) from a BS&A PNUM."""
+
     try:
-        if relatedpnum is None or relatedpnum.startswith('70-15-17-6'):
+        if relatedpnum or relatedpnum.startswith('70-15-17-6'):
             p = pnum
         else:
             p = relatedpnum
@@ -91,6 +90,7 @@ def format_bsaurl(pnum):
 
 
 def find_acres_recorded(legal_desc):
+    """..."""
     reg_exp = r'(?<! BLDG)(?<! NO)(?<! NO\.)(?<! SEC)(?<! EXC [NEWS])' \
                  r' (\d*\.?\d+)' \
                  r'(?! APT )(?! ALL )(?! ALSO )(?! AND )(?! AS )' \
@@ -100,41 +100,19 @@ def find_acres_recorded(legal_desc):
     return a_record
 
 
-def cleanup(directory, gdb_path):
-    """Attempts to delete directory and all files within it."""
-    # Delete temporary layers and temporary file geodatabase
-    print('Deleting temporary layers...')
-    arcpy.Delete_management(['parcel_lyr', 'final_lyr', 'lyr_final_parcel'])
-    print('Deleting temporary feature classes and tables...')
-    arcpy.Delete_management(['fc_orig_parcel', 'fc_proj_parcel', 'bsa_export', 'join_table', 'fc_join_parcel',
-                             'fc_ordered_parcel'])
-    arcpy.ClearWorkspaceCache_management()
-    print('Deleting temporary geodatabase...')
-    arcpy.Delete_management(gdb_path)
-
-    try:
-        shutil.rmtree(directory)
-        print('All temporary files deleted...')
-    except OSError as e:
-        print("Error: %s : %s" % (directory, e.strerror))
-
-    return
-
-
-def get_featureset(data_source):
+def get_featureset(source_gis, source_gis_cfg, cvt_codes_cfg):
     """..."""
     # Connect to ArcGIS Online and create a tax parcel FeatureLayer object
-    print('Connecting to ArcGIS Online and getting feature layer...')
-    gis = GIS()
-    fl_taxparcel = gis.content.get(data_source['item_id']).layers[data_source['lyr_num']]
+    print('Connecting to source GIS and getting feature layer...')
+    fl_taxparcel = source_gis.content.get(source_gis_cfg['item_id']).layers[source_gis_cfg['lyr_num']]
 
     # Format SQL expression based on CVTs requested in config file
-    cvt_list_len = len(data_source['cvt_codes'])
+    cvt_list_len = len(cvt_codes_cfg)
     if cvt_list_len > 1:
-        cvt_list_tup = tuple(data_source['cvt_codes'])
+        cvt_list_tup = tuple(cvt_codes_cfg)
         sql = "CVTTAXCODE IN {}".format(cvt_list_tup)
     elif cvt_list_len == 1:
-        sql = "CVTTAXCODE = '{}'".format(data_source['cvt_codes'][0])
+        sql = "CVTTAXCODE = '{}'".format(cvt_codes_cfg[0])
     else:
         sql = 'CVTTAXCODE = ALL'
 
@@ -155,87 +133,24 @@ def update_summary(gis, portal_item):
     print('Portal item summary updated...')
 
 
-def reorder_fields(table, out_table, field_order, add_missing=True):
-    """
-    Reorders fields in input feature class / table
-    :table:         input table (fc, table, layer, etc)
-    :out_table:     output table (fc, table, layer, etc)
-    :field_order:   order of fields (objectid, shape not necessary)
-    :add_missing:   add missing fields to end if True (leave out if False)
-    -> path to output table
-    """
-    existing_fields = arcpy.ListFields(table)
-    existing_field_names = [field.name for field in existing_fields]
-
-    existing_mapping = arcpy.FieldMappings()
-    existing_mapping.addTable(table)
-
-    new_mapping = arcpy.FieldMappings()
-
-    def add_mapping(field_name):
-        mapping_index = existing_mapping.findFieldMapIndex(field_name)
-
-        # required fields (OBJECTID, etc) will not be in existing mappings
-        # they are added automatically
-        if mapping_index != -1:
-            field_map = existing_mapping.fieldMappings[mapping_index]
-            new_mapping.addFieldMap(field_map)
-
-    # add user fields from field_order
-    for f_name in field_order:
-        if f_name not in existing_field_names:
-            raise Exception("Field: {0} not in {1}".format(f_name, table))
-
-        add_mapping(f_name)
-
-    # add missing fields at end
-    if add_missing:
-        missing_fields = [f for f in existing_field_names if f not in field_order]
-        for f_name in missing_fields:
-            add_mapping(f_name)
-
-    # use merge with single input just to use new field_mappings
-    arcpy.Merge_management(table, out_table, new_mapping)
-    return out_table
-
-
-def stop_service(gis, webgis_config):
-    """Stops the ArcGIS feature service specified in the configuration file."""
-
-    # List federated GIS servers, set variable for first server in list
-    print('Finding federated GIS servers...')
-    gis_server = gis.admin.servers.list()[0]
-    # List all services for specified folder
-    services = gis_server.services.list(webgis_config['serv_folder'])
-    # Stop feature service
-    f_serv = None
-    f_serv_status = False
-    for serv in services:
-        if serv.properties.serviceName == webgis_config['serv_name']:
-            print('Stopping feature service...')
-            f_serv = serv
-            f_serv_status = f_serv.stop()
-            print('Feature service stopped...')
-    return f_serv_status, f_serv
-
-
 def conn_portal(webgis_config):
-    """Creates connection to an ArcGIS Enterprise Portal."""
-    print('Establishing connection to ArcGIS Enterprise Portal...')
+    """Creates connection to ArcGIS Online or an ArcGIS Enterprise Portal."""
     w_gis = None
     try:
-        if cfg_webgis['profile']:
+        if None in (webgis_config['url'], webgis_config['profile']):
+            w_gis = GIS()
+        elif webgis_config['profile']:
             w_gis = GIS(profile=webgis_config['profile'])
         else:
-            w_gis = GIS(webgis_config['portal_url'], webgis_config['username'], webgis_config['password'])
+            w_gis = GIS(webgis_config['url'], webgis_config['username'], webgis_config['password'])
     except Exception as e:
         print('Error: {}'.format(e))
-        print('Exiting script: not able to connect to ArcGIS Enterprise Portal.')
+        print('Exiting script: not able to connect to ArcGIS Online or ArcGIS Enterprise Portal..')
         exit()
     return w_gis
 
 
-def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status, directory, gdb_path):
+def update_target(gis_conn, source_data):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
@@ -287,126 +202,57 @@ def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_st
     update_summary(gis, webgis_config['portal_item'])
 
 
-def geoenrich(directory, featureset, gis_env_config, csv_uri):
-    """Intakes a tax parcel shapefile, modifies fields, reprojects, then joins to BS&A table data. The final layer is
-    copied to a geodatabase feature class."""
+def geoenrich(featureset, target_gis_config, csv_uri):
+    """Intakes a tax parcel as an ArcGIS FeatureSet, converts it to a Spatially Enabled DataFrame, modifies fields,
+    reprojects, and joins data exported from a BS&A table. The function returns a geoenriched Spatially Enabled
+    DataFrame."""
 
-    # Create temporary geodatabase and set path variables
-    print('Creating temporary geodatabase...')
-    gdb_name = 'temp.gdb'
-    arcpy.CreateFileGDB_management(directory, gdb_name)
-    gdb_path = os.path.join(directory, gdb_name)
-
-    # GIS environment settings
-    arcpy.env.workspace = gdb_path
-    arcpy.env.qualifiedFieldNames = False
-    arcpy.env.overwriteOutput = gis_env_config['overwrite_output']
-
-    # FeatureSet to FeatureClass (ArcGIS API for Python)
-    print('Saving feature set to geodatabase feature class...')
-    featureset.save(gdb_path, 'fc_orig_parcel')
-
-    # Correct field names (feature class)
-    print('Correcting field names...')
-    for field_prop in field_lst_fc:
-        arcpy.AlterField_management('fc_orig_parcel', field_prop[0], field_prop[1], field_prop[2])
-
-    # Delete unnecessary fields (feature class)
-    print('Deleting unnecessary fields...')
-    arcpy.DeleteField_management('fc_orig_parcel', dropFields_fc)
+    # FeatureSet to Spatially Enabled DataFrame
+    print('Converting FeatureSet to Spatially Enabled DataFrame...')
+    sdf_source = featureset.sdf
 
     # Modify projection if necessary
-    print('Assessing coordinate system...')
-    in_spatial_ref = arcpy.Describe('fc_orig_parcel').spatialReference
-    out_spatial_ref = arcpy.SpatialReference(gis_env_config['out_fc_proj'])
-    print(f'Current Spatial Reference: {in_spatial_ref.name}')
-    print(f'Output Spatial Reference: {out_spatial_ref.name}')
-    if in_spatial_ref.name == 'Unknown':
+    print("Assessing the DataFrame spatial reference...")
+    in_spatial_ref = sdf_source.spatial.sr
+    in_spatial_ref = in_spatial_ref['wkid']
+    out_spatial_ref = target_gis_config['projection']
+    print('DataFrame spatial reference = WKID: {}'.format(in_spatial_ref))
+    print('Output spatial reference = WKID: {}'.format(out_spatial_ref))
+    # TODO: Update code with correct 'unknown' string
+    if in_spatial_ref == 'Unknown':
         change_proj = False
         print('Could not change projection due to undefined input coordinate system')
-    elif in_spatial_ref.name == out_spatial_ref.name:
+    elif in_spatial_ref == out_spatial_ref:
         change_proj = False
         print('Input and output coordinate systems are the same')
     else:
         change_proj = True
         print('Modifying output coordinate system...')
 
-    # Output final_lyr to enterprise geodatabase feature class
-    print('Copying features to geodatabase feature class...')
     if change_proj:
-        print('Changing projection, making feature layer...')
-        arcpy.Project_management('fc_orig_parcel', 'fc_proj_parcel', out_spatial_ref)
-        arcpy.MakeFeatureLayer_management('fc_proj_parcel', 'parcel_lyr')
-    else:
-        print('Making feature layer...')
-        arcpy.MakeFeatureLayer_management('fc_orig_parcel', 'parcel_lyr')
+        print('Reprojecting DataFrame...')
+        sdf_source.spatial.project(out_spatial_ref)
 
-    # Convert CSV to GDB table
-    print('Finding table...')
-    arcpy.TableToTable_conversion(csv_uri, gdb_path, 'bsa_export')
-
-    # Create empty table to load bsa_export data
-    arcpy.CreateTable_management(gdb_path, 'join_table')
+    # Read CSV into Pandas DataFrame
+    print('Loading table into Pandas DataFrame...')
+    export_table = pd.read_csv(csv_uri)
 
     # Add fields from field_lst_tbl
     for field in field_lst_tbl:
-        if field[1] == 'TEXT':
-            arcpy.AddField_management('join_table', field[0], field[1], field_alias=field[2], field_length=field[3])
-        else:
-            arcpy.AddField_management('join_table', field[0], field[1], field_alias=field[2])
+        export_table.rename(columns={field[1]: field[0]}, inplace=True)
 
-    # Create FieldMappings object to manage merge output fields
-    field_mappings = arcpy.FieldMappings()
+    # export_table['PIN'] = format_pin(export_table['pnum'], export_table['relatedpnum'])
+    # export_table['bsaurl'] = format_bsaurl(export_table['Parcels.pnum'])
+    # export_table['dataexport'] = datetime.now()
+    # export_table['acresrecorded'] = find_acres_recorded(export_table['legalDescription'])
+    #
+    # print('Joining DataFrames...')
+    # sdf_source.set_index('PIN').join(export_table.set_index('PIN'))
+    #
+    # # Calculate Acres field
+    # sdf_source['acres'] = sdf_source.SHAPE.geom.get_area('PLANAR', 'ACRES')
 
-    # Add the target table to the field mappings class to set the schema
-    field_mappings.addTable('join_table')
-
-    # Map fields from bsa_export table
-    for field in field_lst_tbl:
-        if field[4] is not None:
-            fld_map = arcpy.FieldMap()
-            fld_map.addInputField('bsa_export', field[4])
-            # Set name of new output field
-            field_name = fld_map.outputField
-            field_name.name, field_name.type, field_name.aliasName = field[0], field[1], field[2]
-            fld_map.outputField = field_name
-            # Add output field to field mappings object
-            field_mappings.addFieldMap(fld_map)
-
-    # Append the bsa_export data into the join_table
-    arcpy.Append_management('bsa_export', 'join_table', schema_type='NO_TEST', field_mapping=field_mappings)
-
-    # Create expressions for field calculations
-    pin_exp = 'format_pin(!PNUM!, !RELATEDPNUM!)'
-    bsa_url_exp = 'format_bsaurl(!PNUM!)'
-    data_export_exp = 'datetime.now()'
-    acres_recorded_exp = 'find_acres_recorded(!LEGALDESC!)'
-
-    # Calculate fields
-    print('Calculating fields...')
-    arcpy.CalculateField_management('join_table', 'PIN', pin_exp, 'PYTHON3')
-    arcpy.CalculateField_management('join_table', 'BSAURL', bsa_url_exp, 'PYTHON3')
-    arcpy.CalculateField_management('join_table', 'DATAEXPORT', data_export_exp, 'PYTHON3')
-    arcpy.CalculateField_management('join_table', 'ACRESRECORDED', acres_recorded_exp, 'PYTHON3')
-
-    # Join parcel_lyr to bsa_export table
-    print('Joining table to parcel layer...')
-    arcpy.AddJoin_management('parcel_lyr', 'PIN', 'join_table', 'PIN')
-    arcpy.CopyFeatures_management('parcel_lyr', 'fc_join_parcel')
-
-    # Calculate Acres field
-    if gis_env_config['out_fc_proj'] == 'NAD 1983 StatePlane Michigan South FIPS 2113 (Intl Feet)':
-        print('Calculating acres...')
-        arcpy.CalculateGeometryAttributes_management('fc_join_parcel', [['acres', 'AREA']], area_unit='ACRES')
-
-    # Reorder fields
-    print('Reordering fields...')
-    reorder_fields('fc_join_parcel', 'fc_ordered_parcel', final_field_order)
-    arcpy.DeleteField_management('fc_ordered_parcel', dropFields_fc_final)
-    lyr_final_parcel = 'lyr_final_parcel'
-    arcpy.MakeFeatureLayer_management('fc_ordered_parcel', lyr_final_parcel)
-
-    return gdb_path, lyr_final_parcel
+    return export_table
 
 
 if __name__ == "__main__":
@@ -418,29 +264,26 @@ if __name__ == "__main__":
         cfg = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # Set variables based on values from config file
-    cfg_data_source = cfg['data_source']
-    cfg_webgis = cfg['webgis']
-    cfg_gis_env = cfg['gis_env']
+    cfg_source_gis = cfg['source_gis']
+    cfg_target_gis = cfg['target_gis']
+    cfg_cvt_codes = cfg['cvt_codes']
     cfg_csv_uri = cfg['csv_uri']
 
-    # Create connection to ArcGIS Enterprise Portal
-    webgis_conn = conn_portal(cfg_webgis)
+    # Create connection to source GIS
+    print('Connecting to source GIS...')
+    source_conn = conn_portal(cfg_source_gis)
 
-    # Stop ArcGIS feature service
-    serv_stop, service = stop_service(webgis_conn, cfg_webgis)
+    # Query FeatureLayer, return FeatureSet
+    fset = get_featureset(source_conn, cfg_source_gis, cfg_cvt_codes)
 
-    fset = get_featureset(cfg_data_source)
+    # Geoenrich tax parcel features
+    source_dataframe = geoenrich(fset, cfg_target_gis, cfg_csv_uri)
 
-    # Create temporary directory
-    temp_dir = tempfile.mkdtemp()
+    # Create connection to target GIS
+    print('Connecting to target GIS...')
+    target_conn = conn_portal(cfg_target_gis)
 
-    # Geoenrich requested tax parcel data
-    geodatabase_path, final_lyr_name = geoenrich(temp_dir, fset, cfg_gis_env, cfg_csv_uri)
-
-    # Copy to geodatabase
-    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop, temp_dir, geodatabase_path)
-
-    # Cleanup temporary files
-    cleanup(temp_dir, geodatabase_path)
+    # Update target feature layer
+    update_target(target_conn, source_dataframe)
 
     print('Script completed successfully!')
