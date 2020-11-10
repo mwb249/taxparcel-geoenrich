@@ -80,7 +80,7 @@ Once the environment is created, activate it, then update the environment and in
 ```bash
 proswap taxparcel-geoenrich
 conda update --all
-conda install -y pyyaml
+conda install -y pyyaml shapely pyproj
 ```
 
 ### Secure Your *ArcGIS Enterprise Portal* Credentials
