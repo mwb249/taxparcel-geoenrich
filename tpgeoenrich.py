@@ -56,29 +56,31 @@ final_field_order = ['pnum', 'PIN', 'relatedpnum', 'REVISIONDATE', 'CVTTAXCODE',
                      'LIVING_AREA_SQFT', 'dataexport']
 
 
-def format_pin(pnum, relatedpnum):
+def format_pin(row):
     """Formats a Parcel ID Number (PIN) from a BS&A PNUM."""
-
+    pnum = row['pnum']
+    relatedpnum = row['relatedpnum']
     try:
-        if relatedpnum or relatedpnum.startswith('70-15-17-6'):
-            p = pnum
+        if pd.isna(relatedpnum) or relatedpnum.startswith('70-15-17-6'):
+            pin = pnum
         else:
-            p = relatedpnum
-        p = p.split('-')
-        del p[0]
-        p = ''.join(p)
+            pin = relatedpnum
+        pin = pin.split('-')
+        del pin[0]
+        pin = ''.join(pin)
     except IndexError:
-        p = None
-    return p
+        pin = None
+    return pin
 
 
-def format_bsaurl(pnum):
+def format_bsaurl(row):
     """Formats a BS&A Online URL Request based on the PNUM."""
-    if pnum:
+    pnum = row['pnum']
+    if pd.isna(pnum):
+        cvt_code = None
+    else:
         pnum_split = pnum.split('-')
         cvt_code = pnum_split[0]
-    else:
-        cvt_code = None
     cvt_id_dict = {'J ': '268', '70': '385', '68': '1655', 'O ': '1637'}
     url_endpoint = 'https://bsaonline.com/SiteSearch/SiteSearchDetails'
     params = {'SearchCategory': 'Parcel+Number',
@@ -89,8 +91,9 @@ def format_bsaurl(pnum):
     return r.url
 
 
-def find_acres_recorded(legal_desc):
+def find_acres_recorded(row):
     """..."""
+    legal_desc = row['legaldesc']
     reg_exp = r'(?<! BLDG)(?<! NO)(?<! NO\.)(?<! SEC)(?<! EXC [NEWS])' \
               r' (\d*\.?\d+)' \
               r'(?! APT )(?! ALL )(?! ALSO )(?! AND )(?! AS )' \
@@ -100,11 +103,8 @@ def find_acres_recorded(legal_desc):
     return a_record
 
 
-def get_featureset(source_gis, source_gis_cfg, cvt_codes_cfg):
+def get_sdf(source_gis, source_gis_cfg, cvt_codes_cfg):
     """..."""
-    # Connect to ArcGIS Online and create a tax parcel FeatureLayer object
-    print('Connecting to source GIS and getting feature layer...')
-    fl_taxparcel = source_gis.content.get(source_gis_cfg['item_id']).layers[source_gis_cfg['lyr_num']]
 
     # Format SQL expression based on CVTs requested in config file
     cvt_list_len = len(cvt_codes_cfg)
@@ -116,10 +116,11 @@ def get_featureset(source_gis, source_gis_cfg, cvt_codes_cfg):
     else:
         sql = 'CVTTAXCODE = ALL'
 
-    # Query FeatureLayer, return a FeatureSet containing the CVT's tax parcels
-    print('Querying feature layer, returning feature set...')
-    fset_taxparcel = fl_taxparcel.query(where=sql)
-    return fset_taxparcel
+    # Query FeatureLayer, return a Spatially Enabled DataFrame containing the CVT's tax parcels
+    print('Querying feature layer, returning spatially enabled dataframe...')
+    sdf = source_gis.content.get(source_gis_cfg['item_id']).layers[source_gis_cfg['lyr_num']]\
+        .query(where=sql, out_sr=source_gis_cfg['projection'], as_df=True)
+    return sdf
 
 
 def update_summary(gis, portal_item):
@@ -130,7 +131,7 @@ def update_summary(gis, portal_item):
     time = now.strftime('%I:%M %p')
     snippet = 'The tax parcels were last updated on {} at {}.'.format(date, time)
     flc_item.update(item_properties={'snippet': snippet})
-    print('Portal item summary updated...')
+    print('Updated target feature layer collection summary...')
 
 
 def conn_portal(webgis_config):
@@ -150,109 +151,73 @@ def conn_portal(webgis_config):
     return w_gis
 
 
-def update_target(gis_conn, source_data):
+def update_target(gis_conn, target_gis_cfg, joined_dataframe):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
     restarted afterwards.
     """
 
-    # Change environment workspace
-    arcpy.env.workspace = gis_env_config['workspace']
+    # Query target feature layer, return feature set
+    print('Querying target feature layer, returning feature set...')
+    target_lyr = gis_conn.content.get(target_gis_cfg['item_id']).layers[target_gis_cfg['lyr_num']]
+    target_fset = target_lyr.query(gdb_version=None, return_all_records=True)
+    target_df = target_fset.sdf
 
-    # Clear environment workspace cache
-    arcpy.ClearWorkspaceCache_management()
+    # Find overlapping rows
+    overlap_rows = pd.merge(left=joined_dataframe, right=target_df, how='inner',
+                            left_on='PIN', right_on='PIN', suffixes=('', '_target'))
 
-    # Delete existing feature class
-    if arcpy.Exists(gis_env_config['out_fc_name']):
-        fc_path = os.path.join(gis_env_config['workspace'], gis_env_config['out_fc_name'])
-        if arcpy.TestSchemaLock(fc_path):
-            print('Removing existing {} feature class...'.format(gis_env_config['out_fc_name']))
-            arcpy.Delete_management(gis_env_config['out_fc_name'])
-        else:
-            print('Unable to obtain exclusive schema lock '
-                  'on the existing {} feature class...'.format(gis_env_config['out_fc_name']))
-            cleanup(directory, gdb_path)
-            print('Exiting script: Did not update {}.'.format(gis_env_config['out_fc_name']))
-            exit()
+    # TODO: Delete features in target not found in source (based on PIN)
 
-    # Output final_lyr to enterprise geodatabase feature class
-    print('Copying features to geodatabase...')
-    arcpy.CopyFeatures_management(final_lyr, gis_env_config['out_fc_name'])
+    # TODO: Add features not found in target that are in source (based on PIN)
 
-    # Assign domains to fields
-    print('Assigning domains to fields...')
-    field_domain_lst = [['classcode', 'taxClassDESCR'], ['schooltaxcode', 'taxSchoolDESCR']]
-    for domain in field_domain_lst:
-        arcpy.AssignDomainToField_management(gis_env_config['out_fc_name'], domain[0], domain[1])
-
-    print('Altering ObjectID alias...')
-    arcpy.AlterField_management(gis_env_config['out_fc_name'], 'OBJECTID', new_field_alias='OBJECTID')
-
-    # Clear environment workspace cache
-    arcpy.ClearWorkspaceCache_management()
-
-    # Restart feature service
-    if f_serv_status:
-        print('Starting feature service...')
-        f_serv.start()
+    # Update existing features if revision dates do not match
+    for pin in overlap_rows['PIN']:
+        try:
+            row_joined = joined_dataframe.loc[joined_dataframe['PIN'] == pin]
+            row_target = target_df.loc[target_df['PIN'] == pin]
+            if row_joined['REVISIONDATE'] != row_target['REVISIONDATE']:
+                feature = [f for f in target_fset.features if f.attributes['PIN'] == pin][0]
+                # TODO: Iterate through field mapping list, ex below:
+                feature.attributes['xxxxxxx'] = row_joined['xxxxxxx']
+                # TODO: Update geometry
+                target_lyr.edit_features(updates=[feature], gdb_version=target_gis_cfg['gdb_version'])
+        except Exception as e:
+            print('Exception: {}'.format(e))
+            continue
 
     # Update the Portal item summary
-    print('Updating feature service summary...')
-    update_summary(gis, webgis_config['portal_item'])
+    update_summary(gis_conn, target_gis_cfg['item_id'])
 
 
-def geoenrich(featureset, target_gis_config, csv_uri):
+def geoenrich(sdf_source, csv_uri):
     """Intakes a tax parcel as an ArcGIS FeatureSet, converts it to a Spatially Enabled DataFrame, modifies fields,
     reprojects, and joins data exported from a BS&A table. The function returns a geoenriched Spatially Enabled
     DataFrame."""
 
-    # FeatureSet to Spatially Enabled DataFrame
-    print('Converting FeatureSet to Spatially Enabled DataFrame...')
-    sdf_source = featureset.sdf
-
-    # Modify projection if necessary
-    print("Assessing the DataFrame spatial reference...")
-    in_spatial_ref = sdf_source.spatial.sr
-    in_spatial_ref = in_spatial_ref['wkid']
-    out_spatial_ref = target_gis_config['projection']
-    print('DataFrame spatial reference = WKID: {}'.format(in_spatial_ref))
-    print('Output spatial reference = WKID: {}'.format(out_spatial_ref))
-    # TODO: Update code with correct 'unknown' string
-    if in_spatial_ref == 'Unknown':
-        change_proj = False
-        print('Could not change projection due to undefined input coordinate system')
-    elif in_spatial_ref == out_spatial_ref:
-        change_proj = False
-        print('Input and output coordinate systems are the same')
-    else:
-        change_proj = True
-        print('Modifying output coordinate system...')
-
-    if change_proj:
-        print('Reprojecting DataFrame...')
-        sdf_source.spatial.project(out_spatial_ref)
-
     # Read CSV into Pandas DataFrame
     print('Loading table into Pandas DataFrame...')
-    export_table = pd.read_csv(csv_uri)
+    df_export = pd.read_csv(csv_uri)
 
-    # Add fields from field_lst_tbl
+    # Rename fields using field_lst_tbl
+    print('Renaming fields...')
     for field in field_lst_tbl:
-        export_table.rename(columns={field[1]: field[0]}, inplace=True)
+        df_export.rename(columns={field[1]: field[0]}, inplace=True)
 
-    # export_table['PIN'] = format_pin(export_table['pnum'], export_table['relatedpnum'])
-    # export_table['bsaurl'] = format_bsaurl(export_table['Parcels.pnum'])
-    # export_table['dataexport'] = datetime.now()
-    # export_table['acresrecorded'] = find_acres_recorded(export_table['legalDescription'])
-    #
-    # print('Joining DataFrames...')
-    # sdf_source.set_index('PIN').join(export_table.set_index('PIN'))
-    #
-    # # Calculate Acres field
-    # sdf_source['acres'] = sdf_source.SHAPE.geom.get_area('PLANAR', 'ACRES')
+    # Field calculations
+    print('Calculating new fields...')
+    sdf_source['acres'] = sdf_source.SHAPE.geom.area / 43560
+    df_export['PIN_df'] = df_export.apply(format_pin, axis=1)
+    df_export['bsaurl'] = df_export.apply(format_bsaurl, axis=1)
+    df_export['dataexport'] = datetime.now()
+    df_export['acresrecorded'] = df_export.apply(find_acres_recorded, axis=1)
 
-    return export_table
+    # Join Features to Table
+    print('Joining DataFrames...')
+    sdf_joined = sdf_source.set_index('PIN').join(df_export.set_index('PIN_df'), how='left')
+
+    return sdf_joined
 
 
 if __name__ == "__main__":
@@ -274,16 +239,16 @@ if __name__ == "__main__":
     source_conn = conn_portal(cfg_source_gis)
 
     # Query FeatureLayer, return FeatureSet
-    fset = get_featureset(source_conn, cfg_source_gis, cfg_cvt_codes)
+    source_sdf = get_sdf(source_conn, cfg_source_gis, cfg_cvt_codes)
 
     # Geoenrich tax parcel features
-    source_dataframe = geoenrich(fset, cfg_target_gis, cfg_csv_uri)
+    joined_sdf = geoenrich(source_sdf, cfg_csv_uri)
 
     # Create connection to target GIS
     print('Connecting to target GIS...')
     target_conn = conn_portal(cfg_target_gis)
 
     # Update target feature layer
-    update_target(target_conn, source_dataframe)
+    update_target(target_conn, cfg_target_gis, joined_sdf)
 
     print('Script completed successfully!')
