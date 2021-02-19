@@ -10,6 +10,7 @@ import requests
 import yaml
 import re
 import pandas as pd
+from copy import deepcopy
 from datetime import datetime
 from arcgis.gis import GIS
 
@@ -54,6 +55,13 @@ final_field_order = ['pnum', 'PIN', 'relatedpnum', 'REVISIONDATE', 'CVTTAXCODE',
                      'ownerzip', 'ownercountry', 'exemptcode', 'classcode', 'schooltaxcode', 'neighborhoodcode',
                      'ASSESSEDVALUE', 'TAXABLEVALUE', 'bsaurl', 'NUM_BEDS', 'NUM_BATHS', 'STRUCTURE_DESC',
                      'LIVING_AREA_SQFT', 'dataexport']
+
+
+def create_tp_service(target_gis_cfg):
+    """A function that creates an empty hosted feature service, with the tax parcel geoenrich schema, in the target
+    GIS."""
+
+    gis_conn = conn_portal(target_gis_cfg)
 
 
 def format_pin(row):
@@ -158,34 +166,66 @@ def update_target(gis_conn, target_gis_cfg, joined_dataframe):
     restarted afterwards.
     """
 
-    # Query target feature layer, return feature set
-    print('Querying target feature layer, returning feature set...')
+    # Query target feature layer, return necessary fields and dataframe
+    print('Querying target feature layer, returning dataframe...')
     target_lyr = gis_conn.content.get(target_gis_cfg['item_id']).layers[target_gis_cfg['lyr_num']]
-    target_fset = target_lyr.query(gdb_version=None, return_all_records=True)
-    target_df = target_fset.sdf
+    target_df = target_lyr.query(out_fields=['PIN', 'REVISIONDATE', 'GlobalID'],
+                                 gdb_version=target_gis_cfg['gdb_version'], return_geometry=False,
+                                 return_all_records=True, as_df=True)
 
-    # Find overlapping rows
-    overlap_rows = pd.merge(left=joined_dataframe, right=target_df, how='inner',
-                            left_on='PIN', right_on='PIN', suffixes=('', '_target'))
+    # Create Template feature
+    template_fset = target_lyr.query(gdb_version=target_gis_cfg['gdb_version'], result_record_count=1)
+    template_feature = deepcopy(template_fset.features[0])
 
-    # TODO: Delete features in target not found in source (based on PIN)
+    # Create empty lists for adds, updates, and deletes
+    add_lst, update_lst, delete_lst = ([] for _ in range(3))
 
+    # Features to add
+    add_rows = pd.merge(left=joined_dataframe, right=target_df, how='outer', on='PIN', indicator=True)\
+        .loc[lambda x: x['_merge'] == 'left_only']
+    for pin in add_rows['PIN']:
+        try:
+            row_joined = joined_dataframe.loc[joined_dataframe['PIN'] == pin]
+            feature = template_feature
+            # TODO: Iterate through field mapping list
+            feature.attributes['GlobalID'] = None
+            # TODO: Update geometry
+            add_lst.append(feature)
+        except Exception as e:
+            print('Exception: {}'.format(e))
+            continue
     # TODO: Add features not found in target that are in source (based on PIN)
 
-    # Update existing features if revision dates do not match
+    # Features to update
+    overlap_rows = pd.merge(left=joined_dataframe, right=target_df, how='inner', on='PIN')
     for pin in overlap_rows['PIN']:
         try:
             row_joined = joined_dataframe.loc[joined_dataframe['PIN'] == pin]
             row_target = target_df.loc[target_df['PIN'] == pin]
+            # Update feature if revision dates do not match
             if row_joined['REVISIONDATE'] != row_target['REVISIONDATE']:
-                feature = [f for f in target_fset.features if f.attributes['PIN'] == pin][0]
-                # TODO: Iterate through field mapping list, ex below:
-                feature.attributes['xxxxxxx'] = row_joined['xxxxxxx']
+                feature = template_feature
+                # TODO: Iterate through field mapping list
+                feature.attributes['GlobalID'] = row_target['GlobalID']
                 # TODO: Update geometry
-                target_lyr.edit_features(updates=[feature], gdb_version=target_gis_cfg['gdb_version'])
+                update_lst.append(feature)
         except Exception as e:
             print('Exception: {}'.format(e))
             continue
+
+    # Features to delete
+    delete_rows = pd.merge(left=joined_dataframe, right=target_df, how='outer', on='PIN', indicator=True)\
+        .loc[lambda x: x['_merge'] == 'right_only']
+    for pin in delete_rows['PIN']:
+        try:
+            delete_lst.append(pin)
+        except Exception as e:
+            print('Exception: {}'.format(e))
+            continue
+
+    # Edit target feature layer: adds, updates, and deletes
+    target_lyr.edit_features(adds=add_lst, updates=update_lst, deletes=delete_lst,
+                             gdb_version=target_gis_cfg['gdb_version'], use_global_ids=True)
 
     # Update the Portal item summary
     update_summary(gis_conn, target_gis_cfg['item_id'])
@@ -208,14 +248,14 @@ def geoenrich(sdf_source, csv_uri):
     # Field calculations
     print('Calculating new fields...')
     sdf_source['acres'] = sdf_source.SHAPE.geom.area / 43560
-    df_export['PIN_df'] = df_export.apply(format_pin, axis=1)
+    df_export['PIN'] = df_export.apply(format_pin, axis=1)
     df_export['bsaurl'] = df_export.apply(format_bsaurl, axis=1)
     df_export['dataexport'] = datetime.now()
     df_export['acresrecorded'] = df_export.apply(find_acres_recorded, axis=1)
 
     # Join Features to Table
     print('Joining DataFrames...')
-    sdf_joined = sdf_source.set_index('PIN').join(df_export.set_index('PIN_df'), how='left')
+    sdf_joined = sdf_source.set_index('PIN').join(df_export.set_index('PIN'), how='left')
 
     return sdf_joined
 
