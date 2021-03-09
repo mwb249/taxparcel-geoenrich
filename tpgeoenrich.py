@@ -207,16 +207,12 @@ def stop_service(gis, webgis_config):
     gis_server = gis.admin.servers.list()[0]
     # List all services for specified folder
     services = gis_server.services.list(webgis_config['serv_folder'])
-    # Stop feature service
-    f_serv = None
-    f_serv_status = False
+    # Stop feature services
     for serv in services:
-        if serv.properties.serviceName == webgis_config['serv_name']:
-            print('Stopping feature service...')
-            f_serv = serv
-            f_serv_status = f_serv.stop()
-            print('Feature service stopped...')
-    return f_serv_status, f_serv
+        print('Stopping feature services...')
+        serv.stop()
+        print('Feature service: {} stopped...'.format(serv.properties.serviceName))
+    return services
 
 
 def conn_portal(webgis_config):
@@ -235,7 +231,7 @@ def conn_portal(webgis_config):
     return w_gis
 
 
-def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_status):
+def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, services_list):
     """
     Copies the finalized layer to a geodatabase. The feature class will be reprojected, if specified in the config
     file. If a feature service is referencing the feature class, it will be stopped prior to copying features and
@@ -258,10 +254,10 @@ def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, f_serv, f_serv_st
     # Clear environment workspace cache
     arcpy.ClearWorkspaceCache_management()
 
-    # Restart feature service
-    if f_serv_status:
-        print('Starting feature service...')
-        f_serv.start()
+    # Restart feature services
+    for serv in services_list:
+        print('Starting {} feature service'.format(serv.properties.serviceName))
+        serv.start()
 
     # Update the Portal item summary
     print('Updating feature service summary...')
@@ -408,7 +404,7 @@ if __name__ == "__main__":
     webgis_conn = conn_portal(cfg_webgis)
 
     # Stop ArcGIS feature service
-    serv_stop, service = stop_service(webgis_conn, cfg_webgis)
+    services_lst = stop_service(webgis_conn, cfg_webgis)
 
     # Set GIS environment workspace
     arcpy.env.workspace = cfg_gis_env['workspace']
@@ -423,9 +419,9 @@ if __name__ == "__main__":
             pass
         else:
             print('Target feature class is locked...')
-            # Restart feature service
-            if serv_stop:
-                print('Starting feature service...')
+            # Restart feature services
+            for service in services_lst:
+                print('Starting {} feature service'.format(service.properties.serviceName))
                 service.start()
             print('Exiting script: Did not update the {} feature class.'.format(cfg_gis_env['out_fc_name']))
             exit()
@@ -452,7 +448,7 @@ if __name__ == "__main__":
         arcpy.Delete_management(cfg_gis_env['out_fc_name'])
 
     # Copy to geodatabase
-    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, service, serv_stop)
+    push_to_gdb(final_lyr_name, webgis_conn, cfg_webgis, cfg_gis_env, services_lst)
 
     # Cleanup temporary files
     cleanup(temp_dir, geodatabase_path)

@@ -16,7 +16,6 @@ webgis:
   # If the profile field is used - portal_url, username, and passwords fields are ignored
   profile: Profile_SomeGIS
   serv_folder:
-  serv_name:
   portal_item:
 
 # GIS Environment settings
