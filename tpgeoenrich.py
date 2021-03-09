@@ -255,6 +255,7 @@ def push_to_gdb(final_lyr, gis, webgis_config, gis_env_config, services_list):
     arcpy.ClearWorkspaceCache_management()
 
     # Restart feature services
+    print('Starting feature services...')
     for serv in services_list:
         print('Starting {} feature service'.format(serv.properties.serviceName))
         serv.start()
@@ -420,6 +421,7 @@ if __name__ == "__main__":
         else:
             print('Target feature class is locked...')
             # Restart feature services
+            print('Starting feature services...')
             for service in services_lst:
                 print('Starting {} feature service'.format(service.properties.serviceName))
                 service.start()
