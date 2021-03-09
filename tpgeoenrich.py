@@ -208,8 +208,8 @@ def stop_service(gis, webgis_config):
     # List all services for specified folder
     services = gis_server.services.list(webgis_config['serv_folder'])
     # Stop feature services
+    print('Stopping feature services...')
     for serv in services:
-        print('Stopping feature services...')
         serv.stop()
         print('Feature service: {} stopped...'.format(serv.properties.serviceName))
     return services
